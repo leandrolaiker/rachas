@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "Rachas",
+    "slug": "rachas",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": ["ios", "android", "web"],
+    "main": "App.tsx"
+  }
+}
