@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { traerDesafios, Desafio } from './src/api';
+import { registerRootComponent } from 'expo';
+import { ActivityIndicator, Platform, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { traerDesafios, ApiError, Desafio, EstadoDesafio } from './src/api';
 
-function colorEstado(estado: string) {
+const Contenedor = Platform.OS === 'web' ? View : SafeAreaView;
+
+function colorEstado(estado: EstadoDesafio) {
   if (estado === 'ACTIVO') return '#1b7a3d';
   if (estado === 'PROGRAMADO') return '#8a6d00';
   if (estado === 'FINALIZADO') return '#555';
@@ -13,18 +16,17 @@ export default function App() {
   const [datos, setDatos] = useState<Desafio[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
-  const [refrescando, setRefrescando] = useState(false);
 
   async function cargar() {
     try {
       setError('');
       const lista = await traerDesafios();
       setDatos(lista);
-    } catch (e: any) {
-      setError('No pude traer los desafios. Revisa que el back este corriendo.');
+    } catch (e: unknown) {
+      if (e instanceof ApiError) setError(e.message);
+      else setError('No pude traer los desafios. Revisa que el back este corriendo.');
     } finally {
       setCargando(false);
-      setRefrescando(false);
     }
   }
 
@@ -34,49 +36,51 @@ export default function App() {
 
   if (cargando) {
     return (
-      <SafeAreaView style={estilos.centro}>
+      <Contenedor style={estilos.centro}>
         <ActivityIndicator size="large" />
         <Text style={estilos.mensaje}>Trayendo los desafios...</Text>
-      </SafeAreaView>
+      </Contenedor>
     );
   }
 
   if (error && datos.length === 0) {
     return (
-      <SafeAreaView style={estilos.centro}>
+      <Contenedor style={estilos.centro}>
         <Text style={estilos.titulo}>Rachas</Text>
         <Text style={estilos.mensaje}>{error}</Text>
         <Text style={estilos.detalle} onPress={cargar}>Toca para reintentar</Text>
-      </SafeAreaView>
+      </Contenedor>
     );
   }
 
   return (
-    <SafeAreaView style={estilos.pantalla}>
+    <Contenedor style={estilos.pantalla}>
       <Text style={estilos.titulo}>Rachas</Text>
       <Text style={estilos.subtitulo}>Desafios con amigos</Text>
       {error ? <Text style={estilos.aviso}>{error}</Text> : null}
-      <FlatList
-        data={datos}
-        keyExtractor={(item) => item.id}
-        refreshControl={<RefreshControl refreshing={refrescando} onRefresh={() => { setRefrescando(true); cargar(); }} />}
-        ListEmptyComponent={<Text style={estilos.mensaje}>Todavia no hay desafios.</Text>}
-        renderItem={({ item }) => (
-          <View style={estilos.tarjeta}>
-            <Text style={estilos.nombre}>{item.nombre}</Text>
-            <Text style={estilos.linea}>{item.categoria} - {item.inicio} al {item.fin}</Text>
-            <Text style={[estilos.estado, { color: colorEstado(item.estado) }]}>{item.estado}</Text>
-            <Text style={estilos.linea}>{item.participantes ?? 0}/{item.maxParticipantes} participantes</Text>
-          </View>
+      <ScrollView style={estilos.lista} contentContainerStyle={estilos.listaContenido}>
+        {datos.length === 0 ? (
+          <Text style={estilos.mensaje}>Todavia no hay desafios.</Text>
+        ) : (
+          datos.map((item) => (
+            <View key={item.id} style={estilos.tarjeta}>
+              <Text style={estilos.nombre}>{item.nombre}</Text>
+              <Text style={estilos.linea}>{item.categoria} - {item.inicio} al {item.fin}</Text>
+              <Text style={[estilos.estado, { color: colorEstado(item.estado) }]}>{item.estado}</Text>
+              <Text style={estilos.linea}>{item.participantes ?? 0}/{item.maxParticipantes} participantes</Text>
+            </View>
+          ))
         )}
-      />
-    </SafeAreaView>
+      </ScrollView>
+    </Contenedor>
   );
 }
 
 const estilos = StyleSheet.create({
-  pantalla: { flex: 1, padding: 16, backgroundColor: '#fafafa' },
-  centro: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  pantalla: { flex: 1, padding: 16, backgroundColor: '#fafafa', ...(Platform.OS === 'web' ? { minHeight: '100vh' as any, maxWidth: 640, width: '100%', marginHorizontal: 'auto' as any } : {}) },
+  lista: { flex: 1 },
+  listaContenido: { paddingBottom: 24 },
+  centro: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, ...(Platform.OS === 'web' ? { minHeight: '100vh' as any } : {}) },
   titulo: { fontSize: 28, fontWeight: 'bold' },
   subtitulo: { fontSize: 15, color: '#666', marginBottom: 12 },
   mensaje: { marginTop: 12, fontSize: 15, textAlign: 'center' },
@@ -87,3 +91,5 @@ const estilos = StyleSheet.create({
   linea: { fontSize: 13, color: '#555', marginTop: 4 },
   estado: { fontWeight: 'bold', marginTop: 6 },
 });
+
+registerRootComponent(App);

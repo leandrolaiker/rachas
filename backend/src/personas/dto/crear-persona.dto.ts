@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Length, Matches, Max, MaxLength, Min } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, Length, Matches } from 'class-validator';
 
 export class CrearPersonaDto {
   @IsString()
@@ -16,5 +16,6 @@ export class CrearPersonaDto {
 
   @IsOptional()
   @IsString()
+  @Matches(/^[A-Za-z]+\/[A-Za-z_+-]+(\/[A-Za-z_+-]+)*$/, { message: 'zonaHoraria debe ser un nombre IANA valido' })
   zonaHoraria?: string;
 }

@@ -63,6 +63,14 @@ export class DesafiosService {
     const creador = await this.personaOr404(usuarioId);
     const inicioDia = datos.inicio.slice(0, 10);
     const finDia = datos.fin.slice(0, 10);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(inicioDia) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(finDia) ||
+      Number.isNaN(new Date(inicioDia + 'T12:00:00.000Z').getTime()) ||
+      Number.isNaN(new Date(finDia + 'T12:00:00.000Z').getTime())
+    ) {
+      throw new BadRequestException('Fechas invalidas');
+    }
     if (finDia < inicioDia) throw new BadRequestException('La fecha de fin es anterior al inicio');
     if (inicioDia < hoyDia()) throw new BadRequestException('El desafio no puede empezar en el pasado');
     const duracion = diferenciaDias(inicioDia, finDia);
@@ -91,6 +99,14 @@ export class DesafiosService {
   }
 
   async listar(filtros: { estado?: string; categoria?: string; personaId?: string }) {
+    const estados = ['PROGRAMADO', 'ACTIVO', 'FINALIZADO', 'CANCELADO'];
+    const categorias = ['SALUD', 'ESTUDIO', 'FINANZAS', 'BIENESTAR', 'OTRO'];
+    if (filtros.estado !== undefined && !estados.includes(filtros.estado)) {
+      throw new BadRequestException('Estado invalido');
+    }
+    if (filtros.categoria !== undefined && !categorias.includes(filtros.categoria)) {
+      throw new BadRequestException('Categoria invalida');
+    }
     let query: any = {};
     if (filtros.categoria) query.categoria = filtros.categoria;
     const todos = await this.desafios.find(query).sort({ inicio: 1 }).exec();
@@ -137,12 +153,23 @@ export class DesafiosService {
     if (desafio.creadorId.toString() !== actor._id.toString()) throw new ForbiddenException('Solo el creador puede modificarlo');
     const estado = calcularEstado(desafio.inicio, desafio.fin, desafio.cancelado);
     if (estado === 'FINALIZADO' || estado === 'CANCELADO') throw new ConflictException('El desafio ya esta cerrado');
-    if (datos.nombre !== undefined) desafio.nombre = datos.nombre.trim();
+    if (datos.nombre !== undefined) {
+      if (!datos.nombre.trim()) throw new BadRequestException('Nombre invalido');
+      desafio.nombre = datos.nombre.trim();
+    }
     if (datos.descripcion !== undefined) desafio.descripcion = (datos.descripcion ?? '').trim();
     if (datos.inicio !== undefined || datos.fin !== undefined || datos.maxParticipantes !== undefined) {
       if (estado !== 'PROGRAMADO') throw new ConflictException('Solo se pueden cambiar fechas y cupo en PROGRAMADO');
       const nuevoInicio = ((datos.inicio ?? aDia(desafio.inicio)) as string).slice(0, 10);
       const nuevoFin = ((datos.fin ?? aDia(desafio.fin)) as string).slice(0, 10);
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(nuevoInicio) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(nuevoFin) ||
+        Number.isNaN(new Date(nuevoInicio + 'T12:00:00.000Z').getTime()) ||
+        Number.isNaN(new Date(nuevoFin + 'T12:00:00.000Z').getTime())
+      ) {
+        throw new BadRequestException('Fechas invalidas');
+      }
       if (nuevoFin < nuevoInicio) throw new BadRequestException('La fecha de fin es anterior al inicio');
       if (nuevoInicio < hoyDia()) throw new BadRequestException('El desafio no puede empezar en el pasado');
       const duracion = diferenciaDias(nuevoInicio, nuevoFin);
@@ -193,9 +220,11 @@ export class DesafiosService {
   }
 
   async abandonar(usuarioId: string, id: string) {
-    const persona = await this.personaOr404(usuarioId);
     const desafio = await this.desafioOr404(id);
+    const persona = await this.personaOr404(usuarioId);
     if (desafio.creadorId.toString() === persona._id.toString()) throw new ForbiddenException('El creador tiene que cancelarlo');
+    const estado = calcularEstado(desafio.inicio, desafio.fin, desafio.cancelado);
+    if (estado === 'FINALIZADO' || estado === 'CANCELADO') throw new ConflictException('El desafio ya esta cerrado');
     const parte = await this.partes.findOne({ desafioId: desafio._id, personaId: persona._id }).exec();
     if (!parte || !parte.activa) throw new NotFoundException('No participas en este desafio');
     parte.activa = false;

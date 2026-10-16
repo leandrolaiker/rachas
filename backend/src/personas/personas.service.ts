@@ -1,9 +1,13 @@
 import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Persona } from './persona.schema';
 import { CrearPersonaDto } from './dto/crear-persona.dto';
 import { ActualizarPersonaDto } from './dto/actualizar-persona.dto';
+
+function zonaValida(zona: string): boolean {
+  return /^[A-Za-z]+\/[A-Za-z_+-]+(\/[A-Za-z_+-]+)*$/.test(zona);
+}
 
 function formatear(persona: any) {
   const obj = persona.toObject ? persona.toObject({ versionKey: false }) : { ...persona };
@@ -23,6 +27,8 @@ export class PersonasService {
       throw new BadRequestException('Alias invalido');
     }
     const email = datos.email.trim().toLowerCase();
+    const zona = datos.zonaHoraria?.trim() || 'America/Argentina/Buenos_Aires';
+    if (!zonaValida(zona)) throw new BadRequestException('Zona horaria invalida');
     const repetido = await this.modelo.findOne({ $or: [{ alias }, { email }] }).exec();
     if (repetido) {
       if (repetido.alias === alias) throw new ConflictException('Ya existe una persona con ese alias');
@@ -33,7 +39,7 @@ export class PersonasService {
         nombre: datos.nombre.trim(),
         alias,
         email: datos.email.trim().toLowerCase(),
-        zonaHoraria: datos.zonaHoraria?.trim() || 'America/Argentina/Buenos_Aires',
+        zonaHoraria: zona,
       });
       return formatear(creada);
     } catch (error: any) {
@@ -51,22 +57,25 @@ export class PersonasService {
   }
 
   async buscarPorId(id: string) {
-    let persona = null;
-    try {
-      persona = await this.modelo.findById(id).exec();
-    } catch {
-      throw new BadRequestException('Identificador invalido');
-    }
+    if (!Types.ObjectId.isValid(id)) throw new BadRequestException('Identificador invalido');
+    const persona = await this.modelo.findById(id).exec();
     if (!persona) throw new NotFoundException('Persona no encontrada');
     return formatear(persona);
   }
 
   async actualizar(id: string, datos: ActualizarPersonaDto) {
-    const persona = await this.modelo.findById(id).exec().catch(() => null);
+    if (!Types.ObjectId.isValid(id)) throw new BadRequestException('Identificador invalido');
+    const persona = await this.modelo.findById(id).exec();
     if (!persona) throw new NotFoundException('Persona no encontrada');
-    if (datos.nombre !== undefined) persona.nombre = datos.nombre.trim();
-    if (datos.zonaHoraria !== undefined) persona.zonaHoraria = datos.zonaHoraria.trim() || 'America/Argentina/Buenos_Aires';
-    if (!persona.nombre) throw new BadRequestException('Nombre invalido');
+    if (datos.nombre !== undefined) {
+      if (!datos.nombre.trim()) throw new BadRequestException('Nombre invalido');
+      persona.nombre = datos.nombre.trim();
+    }
+    if (datos.zonaHoraria !== undefined) {
+      const zona = datos.zonaHoraria.trim() || 'America/Argentina/Buenos_Aires';
+      if (!zonaValida(zona)) throw new BadRequestException('Zona horaria invalida');
+      persona.zonaHoraria = zona;
+    }
     await persona.save();
     return formatear(persona);
   }
