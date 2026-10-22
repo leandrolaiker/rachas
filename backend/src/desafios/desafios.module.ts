@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Desafio, DesafioSchema } from './desafio.schema';
 import { Persona, PersonaSchema } from '../personas/persona.schema';
 import { Participacion, ParticipacionSchema } from '../participaciones/participacion.schema';
+import { Checkin, CheckinSchema } from '../checkins/checkin.schema';
 import { DesafiosService } from './desafios.service';
 import { DesafiosController } from './desafios.controller';
 
@@ -12,6 +13,7 @@ import { DesafiosController } from './desafios.controller';
       { name: Desafio.name, schema: DesafioSchema },
       { name: Persona.name, schema: PersonaSchema },
       { name: Participacion.name, schema: ParticipacionSchema },
+      { name: Checkin.name, schema: CheckinSchema },
     ]),
   ],
   controllers: [DesafiosController],

@@ -6,7 +6,7 @@ import { Desafio } from '../desafios/desafio.schema';
 import { Persona } from '../personas/persona.schema';
 import { Participacion } from '../participaciones/participacion.schema';
 import { CrearCheckinDto } from './dto/crear-checkin.dto';
-import { calcularEstado, formatearId, hoyDia, sumarDias } from '../common/ayudas';
+import { calcularEstado, formatearId, hoyDia, rachaDeDias, sumarDias } from '../common/ayudas';
 
 @Injectable()
 export class CheckinsService {
@@ -46,6 +46,21 @@ export class CheckinsService {
     const finDia = new Date(desafio.fin).toISOString().slice(0, 10);
     if (dia < inicioDia || dia > finDia) throw new BadRequestException('El dia esta fuera del desafio');
     if (dia > hoy) throw new BadRequestException('No se puede registrar un dia futuro');
+
+    // calcular racha incluyendo este check-in
+    const existentes = await this.checkins.find({ desafioId: desafio._id, personaId: persona._id }).exec();
+    const dias = existentes.map((c) => c.dia);
+    dias.push(dia);
+    // racha que termina en este dia
+    let rachaIncluyendo = 1;
+    let cursor = sumarDias(dia, -1);
+    const set = new Set(dias);
+    while (set.has(cursor) && cursor !== dia) {
+      rachaIncluyendo++;
+      cursor = sumarDias(cursor, -1);
+    }
+    const puntos = 10 + (rachaIncluyendo < 3 ? 0 : rachaIncluyendo <= 6 ? 5 : 10);
+
     try {
       const creado = await this.checkins.create({
         desafioId: desafio._id,
@@ -53,21 +68,40 @@ export class CheckinsService {
         dia,
         nota: (datos.nota ?? '').trim(),
         valor: datos.valor,
+        puntos,
       });
-      return formatearId(creado);
+      const obj = formatearId(creado);
+      obj.racha = rachaIncluyendo;
+      return obj;
     } catch (error: any) {
       if (error?.code === 11000) throw new ConflictException('Ya registraste ese dia');
       throw error;
     }
   }
 
-  async listar(desafioId: string, personaId: string) {
+  async listar(desafioId: string, personaId: string, page = 1, limit = 20) {
     const desafio = await this.desafioOr404(desafioId);
     if (!Types.ObjectId.isValid(personaId)) throw new BadRequestException('Identificador invalido');
     const persona = await this.personas.findById(personaId).exec();
     if (!persona) throw new NotFoundException('Persona no encontrada');
-    const lista = await this.checkins.find({ desafioId: desafio._id, personaId: persona._id }).sort({ dia: 1 }).exec();
-    return lista.map((c) => formatearId(c));
+    const skip = (page - 1) * limit;
+    const [lista, total] = await Promise.all([
+      this.checkins.find({ desafioId: desafio._id, personaId: persona._id }).sort({ dia: -1 }).skip(skip).limit(limit).exec(),
+      this.checkins.countDocuments({ desafioId: desafio._id, personaId: persona._id }).exec(),
+    ]);
+    return { items: lista.map((c) => formatearId(c)), total, page, limit };
+  }
+
+  async rachaDePersona(desafioId: string, personaId: string) {
+    const desafio = await this.desafioOr404(desafioId);
+    if (!Types.ObjectId.isValid(personaId)) throw new BadRequestException('Identificador invalido');
+    const persona = await this.personas.findById(personaId).exec();
+    if (!persona) throw new NotFoundException('Persona no encontrada');
+    const lista = await this.checkins.find({ desafioId: desafio._id, personaId: persona._id }).exec();
+    const dias = lista.map((c) => c.dia);
+    const { actual, mejor } = rachaDeDias(dias);
+    const puntos = lista.reduce((acc, c) => acc + (c.puntos || 0), 0);
+    return { personaId, rachaActual: actual, mejorRacha: mejor, puntos };
   }
 
   async deshacer(usuarioId: string, desafioId: string) {

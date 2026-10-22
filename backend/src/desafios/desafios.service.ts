@@ -4,8 +4,9 @@ import { Model, Types } from 'mongoose';
 import { Desafio } from './desafio.schema';
 import { Persona } from '../personas/persona.schema';
 import { Participacion } from '../participaciones/participacion.schema';
+import { Checkin } from '../checkins/checkin.schema';
 import { CrearDesafioDto } from './dto/crear-desafio.dto';
-import { aDia, calcularEstado, diferenciaDias, formatearId, hoyDia } from '../common/ayudas';
+import { aDia, calcularEstado, diferenciaDias, formatearId, hoyDia, rachaDeDias } from '../common/ayudas';
 
 function codigoNuevo(): string {
   const letras = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -30,6 +31,7 @@ export class DesafiosService {
     @InjectModel(Desafio.name) private desafios: Model<Desafio>,
     @InjectModel(Persona.name) private personas: Model<Persona>,
     @InjectModel(Participacion.name) private partes: Model<Participacion>,
+    @InjectModel(Checkin.name) private checkins: Model<Checkin>,
   ) {}
 
   private async personaOr404(id: string) {
@@ -90,7 +92,7 @@ export class DesafiosService {
     return presentar(desafio, 1);
   }
 
-  async listar(filtros: { estado?: string; categoria?: string; personaId?: string }) {
+  async listar(filtros: { estado?: string; categoria?: string; personaId?: string; page?: number; limit?: number }) {
     let query: any = {};
     if (filtros.categoria) query.categoria = filtros.categoria;
     const todos = await this.desafios.find(query).sort({ inicio: 1 }).exec();
@@ -106,7 +108,12 @@ export class DesafiosService {
       const ids = new Set(lista.map((p) => p.desafioId.toString()));
       salida = salida.filter((d) => ids.has(d.id));
     }
-    return salida;
+    const page = filtros.page || 1;
+    const limit = filtros.limit || 20;
+    const total = salida.length;
+    const skip = (page - 1) * limit;
+    const items = salida.slice(skip, skip + limit);
+    return { items, total, page, limit };
   }
 
   async desafiosDePersona(personaId: string) {
@@ -128,7 +135,12 @@ export class DesafiosService {
   async uno(id: string) {
     const desafio = await this.desafioOr404(id);
     const cantidad = await this.partes.countDocuments({ desafioId: desafio._id, activa: true }).exec();
-    return presentar(desafio, cantidad);
+    const obj = presentar(desafio, cantidad);
+    if (obj.estado === 'FINALIZADO') {
+      const r = await this.ranking(id);
+      if (r.length) obj.ganador = r[0];
+    }
+    return obj;
   }
 
   async actualizar(usuarioId: string, id: string, datos: any) {
@@ -204,6 +216,64 @@ export class DesafiosService {
     return { ok: true };
   }
 
+  async ranking(desafioId: string) {
+    const desafio = await this.desafioOr404(desafioId);
+    const partes = await this.partes.find({ desafioId: desafio._id, activa: true }).exec();
+    const ids = partes.map((p) => p.personaId);
+    const personas = ids.length ? await this.personas.find({ _id: { $in: ids } }).exec() : [];
+    const personaMap = new Map(personas.map((p) => [p._id.toString(), p]));
+    const filas = [] as any[];
+    for (const parte of partes) {
+      const pid = parte.personaId.toString();
+      const persona = personaMap.get(pid);
+      if (!persona) continue;
+      const checkins = await this.checkins.find({ desafioId: desafio._id, personaId: parte.personaId }).exec();
+      const dias = checkins.map((c: any) => c.dia);
+      const { actual, mejor } = rachaDeDias(dias);
+      const puntos = checkins.reduce((acc: number, c: any) => acc + (c.puntos || 0), 0);
+      filas.push({
+        personaId: pid,
+        alias: persona.alias,
+        nombre: persona.nombre,
+        puntos,
+        rachaActual: actual,
+        mejorRacha: mejor,
+      });
+    }
+    filas.sort((a, b) => {
+      if (b.puntos !== a.puntos) return b.puntos - a.puntos;
+      if (b.rachaActual !== a.rachaActual) return b.rachaActual - a.rachaActual;
+      return a.alias.localeCompare(b.alias);
+    });
+    return filas.map((f, i) => ({ ...f, posicion: i + 1 }));
+  }
+
+  async resumen(usuarioId: string) {
+    const persona = await this.personaOr404(usuarioId);
+    const partes = await this.partes.find({ personaId: persona._id, activa: true }).exec();
+    const hoy = hoyDia();
+    const salida = [] as any[];
+    for (const parte of partes) {
+      const desafio = await this.desafios.findById(parte.desafioId).exec();
+      if (!desafio) continue;
+      const estado = calcularEstado(desafio.inicio, desafio.fin, desafio.cancelado);
+      if (estado !== 'PROGRAMADO' && estado !== 'ACTIVO') continue;
+      const ranking = await this.ranking(desafio._id.toString());
+      const miFila = ranking.find((r) => r.personaId === persona._id.toString());
+      const checkins = await this.checkins.find({ desafioId: desafio._id, personaId: persona._id }).exec();
+      const dias = checkins.map((c: any) => c.dia);
+      const { actual } = rachaDeDias(dias);
+      const hizoHoy = dias.includes(hoy);
+      const cantidad = await this.partes.countDocuments({ desafioId: desafio._id, activa: true }).exec();
+      salida.push({
+        ...presentar(desafio, cantidad),
+        rachaActual: actual,
+        posicion: miFila ? miFila.posicion : null,
+        hizoCheckinHoy: hizoHoy,
+      });
+    }
+    return salida;
+  }
   async participantes(id: string) {
     const desafio = await this.desafioOr404(id);
     const lista = await this.partes.find({ desafioId: desafio._id, activa: true }).exec();
@@ -213,3 +283,4 @@ export class DesafiosService {
     return personas.map((p) => formatearId(p));
   }
 }
+

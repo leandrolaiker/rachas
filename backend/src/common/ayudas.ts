@@ -30,6 +30,32 @@ export function calcularEstado(inicio: Date | string, fin: Date | string, cancel
   return 'ACTIVO';
 }
 
+export function rachaDeDias(dias: string[]): { actual: number; mejor: number } {
+  const ordenados = [...new Set(dias)].sort();
+  if (ordenados.length === 0) return { actual: 0, mejor: 0 };
+  let mejor = 1;
+  let corrida = 1;
+  for (let i = 1; i < ordenados.length; i++) {
+    if (sumarDias(ordenados[i - 1], 1) === ordenados[i]) {
+      corrida++;
+      if (corrida > mejor) mejor = corrida;
+    } else {
+      corrida = 1;
+    }
+  }
+  const hoy = hoyDia();
+  const ayer = sumarDias(hoy, -1);
+  const set = new Set(ordenados);
+  let actual = 0;
+  let cursor = set.has(hoy) ? hoy : set.has(ayer) ? ayer : null;
+  if (cursor) {
+    while (set.has(cursor)) {
+      actual++;
+      cursor = sumarDias(cursor, -1);
+    }
+  }
+  return { actual, mejor };
+}
 export function formatearId(doc: any) {
   const obj = doc.toObject ? doc.toObject({ versionKey: false }) : { ...doc };
   obj.id = obj._id.toString();

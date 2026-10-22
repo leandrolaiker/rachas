@@ -1,89 +1,70 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { traerDesafios, Desafio } from './src/api';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { ActivityIndicator, View, Text } from 'react-native';
+import { leerSesion, guardarSesion, borrarSesion } from './src/session';
+import { Persona } from './src/types';
+import IngresoScreen from './src/screens/IngresoScreen';
+import InicioScreen from './src/screens/InicioScreen';
+import ExplorarScreen from './src/screens/ExplorarScreen';
+import CrearScreen from './src/screens/CrearScreen';
+import DetalleScreen from './src/screens/DetalleScreen';
+import PerfilScreen from './src/screens/PerfilScreen';
 
-function colorEstado(estado: string) {
-  if (estado === 'ACTIVO') return '#1b7a3d';
-  if (estado === 'PROGRAMADO') return '#8a6d00';
-  if (estado === 'FINALIZADO') return '#555';
-  return '#a11';
+type Ctx = { persona: Persona | null; setPersona: (p: Persona | null) => void; cerrarSesion: () => Promise<void> };
+export const PersonaContext = createContext<Ctx>({ persona: null, setPersona: () => {}, cerrarSesion: async () => {} });
+export function usePersona() { return useContext(PersonaContext); }
+
+const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+
+function Tabs() {
+  return (
+    <Tab.Navigator>
+      <Tab.Screen name="Inicio" component={InicioScreen} />
+      <Tab.Screen name="Explorar" component={ExplorarScreen} />
+      <Tab.Screen name="Perfil" component={PerfilScreen} />
+    </Tab.Navigator>
+  );
 }
 
 export default function App() {
-  const [datos, setDatos] = useState<Desafio[]>([]);
+  const [persona, setPersona] = useState<Persona | null>(null);
   const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState('');
-  const [refrescando, setRefrescando] = useState(false);
-
-  async function cargar() {
-    try {
-      setError('');
-      const lista = await traerDesafios();
-      setDatos(lista);
-    } catch (e: any) {
-      setError('No pude traer los desafios. Revisa que el back este corriendo.');
-    } finally {
-      setCargando(false);
-      setRefrescando(false);
-    }
-  }
 
   useEffect(() => {
-    cargar();
+    leerSesion().then((p) => { setPersona(p); setCargando(false); });
   }, []);
+
+  async function cerrarSesion() {
+    await borrarSesion();
+    setPersona(null);
+  }
 
   if (cargando) {
     return (
-      <SafeAreaView style={estilos.centro}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" />
-        <Text style={estilos.mensaje}>Trayendo los desafios...</Text>
-      </SafeAreaView>
-    );
-  }
-
-  if (error && datos.length === 0) {
-    return (
-      <SafeAreaView style={estilos.centro}>
-        <Text style={estilos.titulo}>Rachas</Text>
-        <Text style={estilos.mensaje}>{error}</Text>
-        <Text style={estilos.detalle} onPress={cargar}>Toca para reintentar</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={estilos.pantalla}>
-      <Text style={estilos.titulo}>Rachas</Text>
-      <Text style={estilos.subtitulo}>Desafios con amigos</Text>
-      {error ? <Text style={estilos.aviso}>{error}</Text> : null}
-      <FlatList
-        data={datos}
-        keyExtractor={(item) => item.id}
-        refreshControl={<RefreshControl refreshing={refrescando} onRefresh={() => { setRefrescando(true); cargar(); }} />}
-        ListEmptyComponent={<Text style={estilos.mensaje}>Todavia no hay desafios.</Text>}
-        renderItem={({ item }) => (
-          <View style={estilos.tarjeta}>
-            <Text style={estilos.nombre}>{item.nombre}</Text>
-            <Text style={estilos.linea}>{item.categoria} - {item.inicio} al {item.fin}</Text>
-            <Text style={[estilos.estado, { color: colorEstado(item.estado) }]}>{item.estado}</Text>
-            <Text style={estilos.linea}>{item.participantes ?? 0}/{item.maxParticipantes} participantes</Text>
-          </View>
-        )}
-      />
-    </SafeAreaView>
+    <PersonaContext.Provider value={{ persona, setPersona: (p) => { if (p) guardarSesion(p); setPersona(p); }, cerrarSesion }}>
+      <NavigationContainer>
+        <Stack.Navigator>
+          {!persona ? (
+            <Stack.Screen name="Ingreso" component={IngresoScreen} options={{ headerShown: false }} />
+          ) : (
+            <>
+              <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
+              <Stack.Screen name="Detalle" component={DetalleScreen} />
+              <Stack.Screen name="Crear" component={CrearScreen} />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </PersonaContext.Provider>
   );
 }
-
-const estilos = StyleSheet.create({
-  pantalla: { flex: 1, padding: 16, backgroundColor: '#fafafa' },
-  centro: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  titulo: { fontSize: 28, fontWeight: 'bold' },
-  subtitulo: { fontSize: 15, color: '#666', marginBottom: 12 },
-  mensaje: { marginTop: 12, fontSize: 15, textAlign: 'center' },
-  detalle: { marginTop: 8, color: '#1a5fb4', fontSize: 15 },
-  aviso: { color: '#a11', marginBottom: 8 },
-  tarjeta: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10, elevation: 2 },
-  nombre: { fontSize: 17, fontWeight: 'bold' },
-  linea: { fontSize: 13, color: '#555', marginTop: 4 },
-  estado: { fontWeight: 'bold', marginTop: 6 },
-});
