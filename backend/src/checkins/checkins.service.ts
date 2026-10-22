@@ -34,24 +34,25 @@ export class CheckinsService {
   async registrar(usuarioId: string, desafioId: string, datos: CrearCheckinDto) {
     const persona = await this.personaOr404(usuarioId);
     const desafio = await this.desafioOr404(desafioId);
-    const estado = calcularEstado(desafio.inicio, desafio.fin, desafio.cancelado);
-    if (estado !== 'ACTIVO') throw new ConflictException('Solo se puede registrar en un desafio ACTIVO');
     const parte = await this.partes.findOne({ desafioId: desafio._id, personaId: persona._id }).exec();
     if (!parte || !parte.activa) throw new ForbiddenException('Solo los participantes pueden registrar');
+    const estado = calcularEstado(desafio.inicio, desafio.fin, desafio.cancelado);
+    if (estado !== 'ACTIVO') throw new ConflictException('Solo se puede registrar en un desafio ACTIVO');
     const hoy = hoyDia();
-    const ayer = sumarDias(hoy, -1);
     const dia = (datos.dia ?? hoy).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dia) || Number.isNaN(new Date(dia + 'T12:00:00.000Z').getTime())) {
+      throw new BadRequestException('Dia invalido');
+    }
+    const ayer = sumarDias(hoy, -1);
     if (dia !== hoy && dia !== ayer) throw new BadRequestException('Solo se puede registrar hoy o ayer');
+    if (dia > hoy) throw new BadRequestException('No se puede registrar un dia futuro');
     const inicioDia = new Date(desafio.inicio).toISOString().slice(0, 10);
     const finDia = new Date(desafio.fin).toISOString().slice(0, 10);
-    if (dia < inicioDia || dia > finDia) throw new BadRequestException('El dia esta fuera del desafio');
-    if (dia > hoy) throw new BadRequestException('No se puede registrar un dia futuro');
+    if (dia < inicioDia || dia > finDia) throw new ConflictException('El dia esta fuera del desafio');
 
-    // calcular racha incluyendo este check-in
     const existentes = await this.checkins.find({ desafioId: desafio._id, personaId: persona._id }).exec();
     const dias = existentes.map((c) => c.dia);
     dias.push(dia);
-    // racha que termina en este dia
     let rachaIncluyendo = 1;
     let cursor = sumarDias(dia, -1);
     const set = new Set(dias);
@@ -86,7 +87,7 @@ export class CheckinsService {
     if (!persona) throw new NotFoundException('Persona no encontrada');
     const skip = (page - 1) * limit;
     const [lista, total] = await Promise.all([
-      this.checkins.find({ desafioId: desafio._id, personaId: persona._id }).sort({ dia: -1 }).skip(skip).limit(limit).exec(),
+      this.checkins.find({ desafioId: desafio._id, personaId: persona._id }).sort({ dia: 1 }).skip(skip).limit(limit).exec(),
       this.checkins.countDocuments({ desafioId: desafio._id, personaId: persona._id }).exec(),
     ]);
     return { items: lista.map((c) => formatearId(c)), total, page, limit };
@@ -107,6 +108,10 @@ export class CheckinsService {
   async deshacer(usuarioId: string, desafioId: string) {
     const persona = await this.personaOr404(usuarioId);
     const desafio = await this.desafioOr404(desafioId);
+    const parte = await this.partes.findOne({ desafioId: desafio._id, personaId: persona._id }).exec();
+    if (!parte || !parte.activa) throw new ForbiddenException('Solo los participantes pueden deshacer');
+    const estado = calcularEstado(desafio.inicio, desafio.fin, desafio.cancelado);
+    if (estado !== 'ACTIVO') throw new ConflictException('Solo se puede deshacer en un desafio ACTIVO');
     const ultimo = await this.checkins.findOne({ desafioId: desafio._id, personaId: persona._id }).sort({ dia: -1, creadaEn: -1 }).exec();
     if (!ultimo) throw new NotFoundException('No tenes check-ins para deshacer');
     if (ultimo.dia !== hoyDia()) throw new ConflictException('Solo se puede deshacer el check-in de hoy');

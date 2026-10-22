@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rachas - Desafios</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #fafafa; color: #111; }
+    .wrap { max-width: 640px; margin: 0 auto; padding: 20px 16px 40px; }
+    h1 { font-size: 28px; }
+    .sub { color: #666; margin: 4px 0 16px; }
+    .estado-carga, .error, .vacio { background: #fff; border-radius: 12px; padding: 20px; text-align: center; color: #555; }
+    .error { color: #a11; }
+    .error button { margin-top: 12px; padding: 10px 18px; border: 0; border-radius: 8px; background: #1a5fb4; color: #fff; font-size: 15px; cursor: pointer; }
+    .tarjeta { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+    .nombre { font-size: 17px; font-weight: bold; }
+    .linea { font-size: 13px; color: #555; margin-top: 4px; }
+    .estado { font-weight: bold; margin-top: 6px; }
+    .ACTIVO { color: #1b7a3d; } .PROGRAMADO { color: #8a6d00; } .FINALIZADO { color: #555; } .CANCELADO { color: #a11; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Rachas</h1>
+    <p class="sub">Desafios con amigos</p>
+    <div id="contenido"><div class="estado-carga">Trayendo los desafios...</div></div>
+  </div>
+  <script>
+    var API = 'http://localhost:3000';
+    function color(estado) { return estado || ''; }
+    function tarjeta(d) {
+      return '<div class="tarjeta"><div class="nombre">' + d.nombre + '</div>' +
+        '<div class="linea">' + d.categoria + ' - ' + d.inicio + ' al ' + d.fin + '</div>' +
+        '<div class="estado ' + color(d.estado) + '">' + d.estado + '</div>' +
+        '<div class="linea">' + (d.participantes ?? 0) + '/' + d.maxParticipantes + ' participantes</div></div>';
+    }
+    async function cargar() {
+      var caja = document.getElementById('contenido');
+      try {
+        var r = await fetch(API + '/desafios');
+        if (!r.ok) throw new Error('El servidor respondio ' + r.status);
+        var lista = await r.json();
+        caja.innerHTML = lista.length ? lista.map(tarjeta).join('') : '<div class="vacio">Todavia no hay desafios.</div>';
+      } catch (e) {
+        caja.innerHTML = '<div class="error">No pude traer los desafios. Revisa que el back este corriendo.<br /><button onclick="cargar()">Toca para reintentar</button></div>';
+      }
+    }
+    cargar();
+  </script>
+</body>
+</html>
