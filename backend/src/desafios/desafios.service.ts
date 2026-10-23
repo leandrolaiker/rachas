@@ -4,8 +4,9 @@ import { Model, Types } from 'mongoose';
 import { Desafio } from './desafio.schema';
 import { Persona } from '../personas/persona.schema';
 import { Participacion } from '../participaciones/participacion.schema';
+import { Checkin } from '../checkins/checkin.schema';
 import { CrearDesafioDto } from './dto/crear-desafio.dto';
-import { aDia, calcularEstado, diferenciaDias, formatearId, hoyDia } from '../common/ayudas';
+import { aDia, calcularEstado, diferenciaDias, formatearId, hoyDia, hoyEnZona, calcularRachas } from '../common/ayudas';
 
 function codigoNuevo(): string {
   const letras = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -30,6 +31,7 @@ export class DesafiosService {
     @InjectModel(Desafio.name) private desafios: Model<Desafio>,
     @InjectModel(Persona.name) private personas: Model<Persona>,
     @InjectModel(Participacion.name) private partes: Model<Participacion>,
+    @InjectModel(Checkin.name) private checkins: Model<Checkin>,
   ) {}
 
   private async personaOr404(id: string) {
@@ -90,7 +92,7 @@ export class DesafiosService {
     return presentar(desafio, 1);
   }
 
-  async listar(filtros: { estado?: string; categoria?: string; personaId?: string }) {
+  async listar(filtros: { estado?: string; categoria?: string; personaId?: string; page?: number; limit?: number }) {
     let query: any = {};
     if (filtros.categoria) query.categoria = filtros.categoria;
     const todos = await this.desafios.find(query).sort({ inicio: 1 }).exec();
@@ -106,7 +108,12 @@ export class DesafiosService {
       const ids = new Set(lista.map((p) => p.desafioId.toString()));
       salida = salida.filter((d) => ids.has(d.id));
     }
-    return salida;
+    const page = Math.max(1, filtros.page || 1);
+    const limit = Math.max(1, filtros.limit || 20);
+    const total = salida.length;
+    const skip = (page - 1) * limit;
+    const items = salida.slice(skip, skip + limit);
+    return { items, total, page, limit };
   }
 
   async desafiosDePersona(personaId: string) {
@@ -204,6 +211,58 @@ export class DesafiosService {
     return { ok: true };
   }
 
+  async ranking(desafioId: string) {
+    const desafio = await this.desafioOr404(desafioId);
+    const partes = await this.partes.find({ desafioId: desafio._id, activa: true }).exec();
+    const ids = partes.map((p) => p.personaId);
+    const personas = await this.personas.find({ _id: { $in: ids } }).exec();
+    const personaMap = new Map(personas.map((p) => [p._id.toString(), p]));
+    const filas: any[] = [];
+    for (const parte of partes) {
+      const pid = parte.personaId.toString();
+      const persona: any = personaMap.get(pid);
+      const checkins = await this.checkins.find({ desafioId: desafio._id, personaId: parte.personaId }).exec();
+      const dias = checkins.map((c: any) => c.dia);
+      const zona = persona?.zonaHoraria || 'America/Argentina/Buenos_Aires';
+      const r = calcularRachas(dias, zona);
+      const puntos = checkins.reduce((a: number, c: any) => a + (c.puntos || 0), 0);
+      filas.push({ personaId: pid, alias: persona?.alias, nombre: persona?.nombre, puntos, rachaActual: r.actual, mejorRacha: r.mejor });
+    }
+    filas.sort((a, b) => b.puntos - a.puntos || b.rachaActual - a.rachaActual || String(a.alias).localeCompare(String(b.alias)));
+    return filas.map((f, i) => ({ ...f, posicion: i + 1 }));
+  }
+
+  async resumenPersona(personaId: string) {
+    if (!Types.ObjectId.isValid(personaId)) throw new BadRequestException('Identificador invalido');
+    const persona = await this.personas.findById(personaId).exec();
+    if (!persona) throw new NotFoundException('Persona no encontrada');
+    const partes = await this.partes.find({ personaId: persona._id, activa: true }).exec();
+    const ids = partes.map((p) => p.desafioId);
+    const desafios = await this.desafios.find({ _id: { $in: ids } }).exec();
+    const zona = persona.zonaHoraria || 'America/Argentina/Buenos_Aires';
+    const hoy = hoyEnZona(zona);
+    const salida: any[] = [];
+    for (const d of desafios) {
+      const estado = calcularEstado(d.inicio, d.fin, d.cancelado);
+      if (estado !== 'PROGRAMADO' && estado !== 'ACTIVO') continue;
+      const checkins = await this.checkins.find({ desafioId: d._id, personaId: persona._id }).exec();
+      const dias = checkins.map((c: any) => c.dia);
+      const r = calcularRachas(dias, zona);
+      const ranking = await this.ranking(d._id.toString());
+      const fila = ranking.find((x: any) => x.personaId === persona._id.toString());
+      const checkinHoy = checkins.some((c: any) => c.dia === hoy);
+      salida.push({
+        desafio: presentar(d, await this.partes.countDocuments({ desafioId: d._id, activa: true }).exec()),
+        rachaActual: r.actual,
+        mejorRacha: r.mejor,
+        posicion: fila ? fila.posicion : null,
+        puntos: fila ? fila.puntos : 0,
+        checkinHoy,
+      });
+    }
+    return salida;
+  }
+
   async participantes(id: string) {
     const desafio = await this.desafioOr404(id);
     const lista = await this.partes.find({ desafioId: desafio._id, activa: true }).exec();
@@ -211,5 +270,10 @@ export class DesafiosService {
     if (ids.length === 0) return [];
     const personas = await this.personas.find({ _id: { $in: ids } }).exec();
     return personas.map((p) => formatearId(p));
+  }
+
+  async ganador(desafioId: string) {
+    const ranking = await this.ranking(desafioId);
+    return ranking.length ? ranking[0] : null;
   }
 }

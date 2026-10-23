@@ -16,8 +16,18 @@ export class CheckinsController {
   }
 
   @Get()
-  listar(@Param('desafioId') desafioId: string, @Query('personaId') personaId: string) {
-    return this.servicio.listar(desafioId, personaId);
+  listar(
+    @Param('desafioId') desafioId: string,
+    @Query('personaId') personaId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.servicio.listar(desafioId, personaId, page ? Number(page) : 1, limit ? Number(limit) : 50);
+  }
+
+  @Get('racha/:personaId')
+  rachas(@Param('desafioId') desafioId: string, @Param('personaId') personaId: string) {
+    return this.servicio.rachas(personaId, desafioId);
   }
 
   @Delete('ultimo')

@@ -1,89 +1,78 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { traerDesafios, Desafio } from './src/api';
+import { ActivityIndicator, Text, View } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { setUsuarioId } from './src/api';
+import { leerSesion, guardarSesion } from './src/storage';
+import { SessionContext } from './src/session';
+import IngresoScreen from './src/screens/IngresoScreen';
+import InicioScreen from './src/screens/InicioScreen';
+import ExplorarScreen from './src/screens/ExplorarScreen';
+import CrearDesafioScreen from './src/screens/CrearDesafioScreen';
+import DetalleScreen from './src/screens/DetalleScreen';
+import PerfilScreen from './src/screens/PerfilScreen';
 
-function colorEstado(estado: string) {
-  if (estado === 'ACTIVO') return '#1b7a3d';
-  if (estado === 'PROGRAMADO') return '#8a6d00';
-  if (estado === 'FINALIZADO') return '#555';
-  return '#a11';
+const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+
+function Tabs() {
+  return (
+    <Tab.Navigator>
+      <Tab.Screen name="Inicio" component={InicioScreen} />
+      <Tab.Screen name="Explorar" component={ExplorarScreen} />
+      <Tab.Screen name="Crear" component={CrearDesafioScreen} />
+      <Tab.Screen name="Perfil" component={PerfilScreen} />
+    </Tab.Navigator>
+  );
 }
 
 export default function App() {
-  const [datos, setDatos] = useState<Desafio[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState('');
-  const [refrescando, setRefrescando] = useState(false);
+  const [listo, setListo] = useState(false);
+  const [usuarioId, setUsuarioIdState] = useState<string | null>(null);
 
-  async function cargar() {
-    try {
-      setError('');
-      const lista = await traerDesafios();
-      setDatos(lista);
-    } catch (e: any) {
-      setError('No pude traer los desafios. Revisa que el back este corriendo.');
-    } finally {
-      setCargando(false);
-      setRefrescando(false);
-    }
+  async function setSession(id: string | null) {
+    setUsuarioId(id);
+    setUsuarioIdState(id);
+    await guardarSesion(id);
   }
 
   useEffect(() => {
-    cargar();
+    (async () => {
+      try {
+        const id = await leerSesion();
+        setUsuarioId(id);
+        setUsuarioIdState(id);
+      } catch (e) {
+        console.error('leerSesion failed', e);
+      } finally {
+        setListo(true);
+      }
+    })();
   }, []);
 
-  if (cargando) {
+  if (!listo) {
     return (
-      <SafeAreaView style={estilos.centro}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" />
-        <Text style={estilos.mensaje}>Trayendo los desafios...</Text>
-      </SafeAreaView>
-    );
-  }
-
-  if (error && datos.length === 0) {
-    return (
-      <SafeAreaView style={estilos.centro}>
-        <Text style={estilos.titulo}>Rachas</Text>
-        <Text style={estilos.mensaje}>{error}</Text>
-        <Text style={estilos.detalle} onPress={cargar}>Toca para reintentar</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={estilos.pantalla}>
-      <Text style={estilos.titulo}>Rachas</Text>
-      <Text style={estilos.subtitulo}>Desafios con amigos</Text>
-      {error ? <Text style={estilos.aviso}>{error}</Text> : null}
-      <FlatList
-        data={datos}
-        keyExtractor={(item) => item.id}
-        refreshControl={<RefreshControl refreshing={refrescando} onRefresh={() => { setRefrescando(true); cargar(); }} />}
-        ListEmptyComponent={<Text style={estilos.mensaje}>Todavia no hay desafios.</Text>}
-        renderItem={({ item }) => (
-          <View style={estilos.tarjeta}>
-            <Text style={estilos.nombre}>{item.nombre}</Text>
-            <Text style={estilos.linea}>{item.categoria} - {item.inicio} al {item.fin}</Text>
-            <Text style={[estilos.estado, { color: colorEstado(item.estado) }]}>{item.estado}</Text>
-            <Text style={estilos.linea}>{item.participantes ?? 0}/{item.maxParticipantes} participantes</Text>
-          </View>
-        )}
-      />
-    </SafeAreaView>
+    <SessionContext.Provider value={{ usuarioId, setSession }}>
+      <NavigationContainer>
+        <Stack.Navigator>
+          {usuarioId ? (
+            <>
+              <Stack.Screen name="Main" component={Tabs} options={{ headerShown: false }} />
+              <Stack.Screen name="Detalle" component={DetalleScreen} />
+            </>
+          ) : (
+            <Stack.Screen name="Ingreso" component={IngresoScreen} options={{ headerShown: false }} />
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SessionContext.Provider>
   );
 }
-
-const estilos = StyleSheet.create({
-  pantalla: { flex: 1, padding: 16, backgroundColor: '#fafafa' },
-  centro: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  titulo: { fontSize: 28, fontWeight: 'bold' },
-  subtitulo: { fontSize: 15, color: '#666', marginBottom: 12 },
-  mensaje: { marginTop: 12, fontSize: 15, textAlign: 'center' },
-  detalle: { marginTop: 8, color: '#1a5fb4', fontSize: 15 },
-  aviso: { color: '#a11', marginBottom: 8 },
-  tarjeta: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10, elevation: 2 },
-  nombre: { fontSize: 17, fontWeight: 'bold' },
-  linea: { fontSize: 13, color: '#555', marginTop: 4 },
-  estado: { fontWeight: 'bold', marginTop: 6 },
-});

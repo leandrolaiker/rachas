@@ -18,6 +18,9 @@ export class Checkin extends Document {
   @Prop()
   valor: number;
 
+  @Prop({ default: 0 })
+  puntos: number;
+
   @Prop({ default: Date.now })
   creadaEn: Date;
 }

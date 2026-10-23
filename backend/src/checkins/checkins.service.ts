@@ -6,7 +6,7 @@ import { Desafio } from '../desafios/desafio.schema';
 import { Persona } from '../personas/persona.schema';
 import { Participacion } from '../participaciones/participacion.schema';
 import { CrearCheckinDto } from './dto/crear-checkin.dto';
-import { calcularEstado, formatearId, hoyDia, sumarDias } from '../common/ayudas';
+import { calcularEstado, formatearId, sumarDias, hoyEnZona, calcularRachas, rachaEnDia, bonusPorRacha } from '../common/ayudas';
 
 @Injectable()
 export class CheckinsService {
@@ -38,7 +38,8 @@ export class CheckinsService {
     if (estado !== 'ACTIVO') throw new ConflictException('Solo se puede registrar en un desafio ACTIVO');
     const parte = await this.partes.findOne({ desafioId: desafio._id, personaId: persona._id }).exec();
     if (!parte || !parte.activa) throw new ForbiddenException('Solo los participantes pueden registrar');
-    const hoy = hoyDia();
+    const zona = persona.zonaHoraria || 'America/Argentina/Buenos_Aires';
+    const hoy = hoyEnZona(zona);
     const ayer = sumarDias(hoy, -1);
     const dia = (datos.dia ?? hoy).slice(0, 10);
     if (dia !== hoy && dia !== ayer) throw new BadRequestException('Solo se puede registrar hoy o ayer');
@@ -46,6 +47,11 @@ export class CheckinsService {
     const finDia = new Date(desafio.fin).toISOString().slice(0, 10);
     if (dia < inicioDia || dia > finDia) throw new BadRequestException('El dia esta fuera del desafio');
     if (dia > hoy) throw new BadRequestException('No se puede registrar un dia futuro');
+    // calcular racha incluyendo este check-in
+    const existentes = await this.checkins.find({ desafioId: desafio._id, personaId: persona._id }).exec();
+    const diasExistentes = existentes.map((c) => c.dia);
+    const racha = rachaEnDia([...diasExistentes, dia], dia);
+    const puntos = 10 + bonusPorRacha(racha);
     try {
       const creado = await this.checkins.create({
         desafioId: desafio._id,
@@ -53,6 +59,7 @@ export class CheckinsService {
         dia,
         nota: (datos.nota ?? '').trim(),
         valor: datos.valor,
+        puntos,
       });
       return formatearId(creado);
     } catch (error: any) {
@@ -61,13 +68,32 @@ export class CheckinsService {
     }
   }
 
-  async listar(desafioId: string, personaId: string) {
+  async listar(desafioId: string, personaId: string, page = 1, limit = 50) {
     const desafio = await this.desafioOr404(desafioId);
     if (!Types.ObjectId.isValid(personaId)) throw new BadRequestException('Identificador invalido');
     const persona = await this.personas.findById(personaId).exec();
     if (!persona) throw new NotFoundException('Persona no encontrada');
-    const lista = await this.checkins.find({ desafioId: desafio._id, personaId: persona._id }).sort({ dia: 1 }).exec();
-    return lista.map((c) => formatearId(c));
+    const skip = (Math.max(1, page) - 1) * Math.max(1, limit);
+    const [lista, total] = await Promise.all([
+      this.checkins.find({ desafioId: desafio._id, personaId: persona._id }).sort({ dia: 1 }).skip(skip).limit(Math.max(1, limit)).exec(),
+      this.checkins.countDocuments({ desafioId: desafio._id, personaId: persona._id }).exec(),
+    ]);
+    return { items: lista.map((c) => formatearId(c)), total, page: Math.max(1, page), limit: Math.max(1, limit) };
+  }
+
+  async rachas(personaId: string, desafioId: string) {
+    if (!Types.ObjectId.isValid(personaId)) throw new BadRequestException('Identificador invalido');
+    if (!Types.ObjectId.isValid(desafioId)) throw new BadRequestException('Identificador invalido');
+    const persona = await this.personas.findById(personaId).exec();
+    if (!persona) throw new NotFoundException('Persona no encontrada');
+    const desafio = await this.desafios.findById(desafioId).exec();
+    if (!desafio) throw new NotFoundException('Desafio no encontrado');
+    const lista = await this.checkins.find({ desafioId: desafio._id, personaId: persona._id }).exec();
+    const dias = lista.map((c) => c.dia);
+    const zona = persona.zonaHoraria || 'America/Argentina/Buenos_Aires';
+    const r = calcularRachas(dias, zona);
+    const puntos = lista.reduce((acc, c) => acc + (c.puntos || 0), 0);
+    return { personaId: persona._id.toString(), desafioId: desafio._id.toString(), rachaActual: r.actual, mejorRacha: r.mejor, puntos };
   }
 
   async deshacer(usuarioId: string, desafioId: string) {
@@ -75,7 +101,9 @@ export class CheckinsService {
     const desafio = await this.desafioOr404(desafioId);
     const ultimo = await this.checkins.findOne({ desafioId: desafio._id, personaId: persona._id }).sort({ dia: -1, creadaEn: -1 }).exec();
     if (!ultimo) throw new NotFoundException('No tenes check-ins para deshacer');
-    if (ultimo.dia !== hoyDia()) throw new ConflictException('Solo se puede deshacer el check-in de hoy');
+    const zona = persona.zonaHoraria || 'America/Argentina/Buenos_Aires';
+    const hoy = hoyEnZona(zona);
+    if (ultimo.dia !== hoy) throw new ConflictException('Solo se puede deshacer el check-in de hoy');
     await ultimo.deleteOne();
     return { ok: true };
   }
