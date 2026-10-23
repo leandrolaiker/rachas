@@ -4,17 +4,50 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base", "value": "http://localhost:3000" },
-    { "key": "personaA", "value": "" },
-    { "key": "personaB", "value": "" },
-    { "key": "desafioId", "value": "" },
-    { "key": "codigo", "value": "" },
-    { "key": "aliasA", "value": "" },
-    { "key": "emailA", "value": "" },
-    { "key": "aliasB", "value": "" },
-    { "key": "emailB", "value": "" },
-    { "key": "hoy", "value": "" },
-    { "key": "fin", "value": "" }
+    {
+      "key": "base",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "personaA",
+      "value": ""
+    },
+    {
+      "key": "personaB",
+      "value": ""
+    },
+    {
+      "key": "desafioId",
+      "value": ""
+    },
+    {
+      "key": "codigo",
+      "value": ""
+    },
+    {
+      "key": "aliasA",
+      "value": ""
+    },
+    {
+      "key": "emailA",
+      "value": ""
+    },
+    {
+      "key": "aliasB",
+      "value": ""
+    },
+    {
+      "key": "emailB",
+      "value": ""
+    },
+    {
+      "key": "hoy",
+      "value": ""
+    },
+    {
+      "key": "fin",
+      "value": ""
+    }
   ],
   "event": [
     {
@@ -22,16 +55,16 @@
       "script": {
         "exec": [
           "if (!pm.collectionVariables.get('aliasA')) {",
-          "var s = Date.now().toString().slice(-6);",
-          "pm.collectionVariables.set('aliasA', 'luci_' + s);",
-          "pm.collectionVariables.set('emailA', 'luci_' + s + '@mail.com');",
-          "pm.collectionVariables.set('aliasB', 'martin_' + s);",
-          "pm.collectionVariables.set('emailB', 'martin_' + s + '@mail.com');",
-          "var h = new Date();",
-          "var f = new Date(); f.setDate(f.getDate() + 20);",
-          "function dia(d) { return d.toISOString().slice(0, 10); }",
-          "pm.collectionVariables.set('hoy', dia(h));",
-          "pm.collectionVariables.set('fin', dia(f));",
+          "  var s = Date.now().toString().slice(-6);",
+          "  pm.collectionVariables.set('aliasA', 'luci_' + s);",
+          "  pm.collectionVariables.set('emailA', 'luci_' + s + '@mail.com');",
+          "  pm.collectionVariables.set('aliasB', 'martin_' + s);",
+          "  pm.collectionVariables.set('emailB', 'martin_' + s + '@mail.com');",
+          "  var h = new Date();",
+          "  var f = new Date(); f.setDate(f.getDate() + 20);",
+          "  function dia(d) { return d.toISOString().slice(0, 10); }",
+          "  pm.collectionVariables.set('hoy', dia(h));",
+          "  pm.collectionVariables.set('fin', dia(f));",
           "}"
         ]
       }
@@ -43,43 +76,240 @@
       "item": [
         {
           "name": "Crear persona 1",
-          "request": { "method": "POST", "url": "{{base}}/personas", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"nombre\":\"Lucia Fernandez\",\"alias\":\"{{aliasA}}\",\"email\":\"{{emailA}}\"}" } },
-          "event": [{ "listen": "test", "script": { "exec": ["pm.test('crea persona 1', function () { pm.response.to.have.status(201); });", "var j = pm.response.json();", "pm.collectionVariables.set('personaA', j.id);", "pm.collectionVariables.set('aliasA', j.alias);"] } }]
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/personas",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nombre\":\"Lucia Fernandez\",\"alias\":\"{{aliasA}}\",\"email\":\"{{emailA}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('crea persona 1', function () { pm.response.to.have.status(201); });",
+                  "var j = pm.response.json();",
+                  "pm.collectionVariables.set('personaA', j.id);",
+                  "pm.collectionVariables.set('aliasA', j.alias);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Crear persona 2",
-          "request": { "method": "POST", "url": "{{base}}/personas", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"nombre\":\"Martin Gomez\",\"alias\":\"{{aliasB}}\",\"email\":\"{{emailB}}\"}" } },
-          "event": [{ "listen": "test", "script": { "exec": ["pm.test('crea persona 2', function () { pm.response.to.have.status(201); });", "var j = pm.response.json();", "pm.collectionVariables.set('personaB', j.id);"] } }]
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/personas",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nombre\":\"Martin Gomez\",\"alias\":\"{{aliasB}}\",\"email\":\"{{emailB}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('crea persona 2', function () { pm.response.to.have.status(201); });",
+                  "var j = pm.response.json();",
+                  "pm.collectionVariables.set('personaB', j.id);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Crear desafio",
-          "request": { "method": "POST", "url": "{{base}}/desafios", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "x-usuario-id", "value": "{{personaA}}" }], "body": { "mode": "raw", "raw": "{\"nombre\":\"Correr 3 veces por semana\",\"descripcion\":\"Racha de running\",\"categoria\":\"SALUD\",\"inicio\":\"{{hoy}}\",\"fin\":\"{{fin}}\",\"maxParticipantes\":10}" } },
-          "event": [{ "listen": "test", "script": { "exec": ["pm.test('crea desafio', function () { pm.response.to.have.status(201); });", "var j = pm.response.json();", "pm.collectionVariables.set('desafioId', j.id);", "pm.collectionVariables.set('codigo', j.codigo);"] } }]
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/desafios",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-usuario-id",
+                "value": "{{personaA}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nombre\":\"Correr 3 veces por semana\",\"descripcion\":\"Racha de running\",\"categoria\":\"SALUD\",\"inicio\":\"{{hoy}}\",\"fin\":\"{{fin}}\",\"maxParticipantes\":10}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('crea desafio', function () { pm.response.to.have.status(201); });",
+                  "var j = pm.response.json();",
+                  "pm.collectionVariables.set('desafioId', j.id);",
+                  "pm.collectionVariables.set('codigo', j.codigo);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Unirse con codigo",
-          "request": { "method": "POST", "url": "{{base}}/desafios/unirse", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "x-usuario-id", "value": "{{personaB}}" }], "body": { "mode": "raw", "raw": "{\"codigo\":\"{{codigo}}\"}" } },
-          "event": [{ "listen": "test", "script": { "exec": ["pm.test('se une', function () { pm.response.to.have.status(201); });"] } }]
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/desafios/unirse",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-usuario-id",
+                "value": "{{personaB}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"codigo\":\"{{codigo}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('se une', function () { pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Ver participantes",
-          "request": { "method": "GET", "url": "{{base}}/desafios/{{desafioId}}/participantes" },
-          "event": [{ "listen": "test", "script": { "exec": ["pm.test('trae participantes', function () { pm.response.to.have.status(200); });"] } }]
+          "request": {
+            "method": "GET",
+            "url": "{{base}}/desafios/{{desafioId}}/participantes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('trae participantes', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Registrar check-in",
-          "request": { "method": "POST", "url": "{{base}}/desafios/{{desafioId}}/checkins", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "x-usuario-id", "value": "{{personaB}}" }], "body": { "mode": "raw", "raw": "{\"nota\":\"Hoy sali igual\",\"valor\":30}" } },
-          "event": [{ "listen": "test", "script": { "exec": ["pm.test('registra check-in', function () { pm.response.to.have.status(201); });"] } }]
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/desafios/{{desafioId}}/checkins",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-usuario-id",
+                "value": "{{personaB}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nota\":\"Hoy sali igual\",\"valor\":30}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('registra check-in', function () { pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Listar check-ins",
-          "request": { "method": "GET", "url": "{{base}}/desafios/{{desafioId}}/checkins?personaId={{personaB}}" },
-          "event": [{ "listen": "test", "script": { "exec": ["pm.test('lista check-ins', function () { pm.response.to.have.status(200); });"] } }]
+          "request": {
+            "method": "GET",
+            "url": "{{base}}/desafios/{{desafioId}}/checkins?personaId={{personaB}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('lista check-ins', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Deshacer check-in",
-          "request": { "method": "DELETE", "url": "{{base}}/desafios/{{desafioId}}/checkins/ultimo", "header": [{ "key": "x-usuario-id", "value": "{{personaB}}" }] },
-          "event": [{ "listen": "test", "script": { "exec": ["pm.test('deshace check-in', function () { pm.response.to.have.status(200); });"] } }]
+          "request": {
+            "method": "DELETE",
+            "url": "{{base}}/desafios/{{desafioId}}/checkins/ultimo",
+            "header": [
+              {
+                "key": "x-usuario-id",
+                "value": "{{personaB}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('deshace check-in', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -88,18 +318,107 @@
       "item": [
         {
           "name": "Alias repetido - 409",
-          "request": { "method": "POST", "url": "{{base}}/personas", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"nombre\":\"Otro\",\"alias\":\"{{aliasA}}\",\"email\":\"otro_{{aliasA}}@mail.com\"}" } },
-          "event": [{ "listen": "test", "script": { "exec": ["pm.test('alias repetido da 409', function () { pm.response.to.have.status(409); });"] } }]
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/personas",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nombre\":\"Otro\",\"alias\":\"{{aliasA}}\",\"email\":\"otro_{{aliasA}}@mail.com\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('alias repetido da 409', function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Unirse dos veces - 409",
-          "request": { "method": "POST", "url": "{{base}}/desafios/unirse", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "x-usuario-id", "value": "{{personaB}}" }], "body": { "mode": "raw", "raw": "{\"codigo\":\"{{codigo}}\"}" } },
-          "event": [{ "listen": "test", "script": { "exec": ["pm.test('unirse dos veces da 409', function () { pm.response.to.have.status(409); });"] } }]
+          "request": {
+            "method": "POST",
+            "url": "{{base}}/desafios/unirse",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-usuario-id",
+                "value": "{{personaB}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"codigo\":\"{{codigo}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('unirse dos veces da 409', function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Modificar sin ser creador - 403",
-          "request": { "method": "PATCH", "url": "{{base}}/desafios/{{desafioId}}", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "x-usuario-id", "value": "{{personaB}}" }], "body": { "mode": "raw", "raw": "{\"nombre\":\"Lo cambio igual\"}" } },
-          "event": [{ "listen": "test", "script": { "exec": ["pm.test('modificar ajeno da 403', function () { pm.response.to.have.status(403); });"] } }]
+          "request": {
+            "method": "PATCH",
+            "url": "{{base}}/desafios/{{desafioId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-usuario-id",
+                "value": "{{personaB}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"nombre\":\"Lo cambio igual\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('modificar ajeno da 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
         }
       ]
     }
