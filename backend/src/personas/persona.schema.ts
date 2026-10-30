@@ -14,6 +14,12 @@ export class Persona extends Document {
 
   @Prop({ required: true, default: 'America/Argentina/Buenos_Aires' })
   zonaHoraria: string;
+
+  @Prop({ required: true })
+  passwordHash: string;
+
+  @Prop()
+  authToken?: string;
 }
 
 export const PersonaSchema = SchemaFactory.createForClass(Persona);

@@ -5,6 +5,13 @@ import { Persona } from '../personas/persona.schema';
 import { Desafio } from '../desafios/desafio.schema';
 import { Participacion } from '../participaciones/participacion.schema';
 import { hoyDia, sumarDias } from '../common/ayudas';
+import * as crypto from 'crypto';
+
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
 
 @Injectable()
 export class SeedService implements OnModuleInit {
@@ -17,12 +24,15 @@ export class SeedService implements OnModuleInit {
   async onModuleInit() {
     try {
       const cantidad = await this.personas.countDocuments().exec();
-      if (cantidad > 0) return;
+      if (cantidad > 0) {
+        await this.personas.updateMany({ $or: [{ passwordHash: { $exists: false } }, { passwordHash: null }] }, { $set: { passwordHash: hashPassword('rachas123') } }).exec();
+        return;
+      }
       const hoy = hoyDia();
       const gente = await this.personas.insertMany([
-        { nombre: 'Lucia Fernandez', alias: 'luci_f', email: 'luci@mail.com', zonaHoraria: 'America/Argentina/Buenos_Aires' },
-        { nombre: 'Martin Gomez', alias: 'martin_g', email: 'martin@mail.com', zonaHoraria: 'America/Argentina/Buenos_Aires' },
-        { nombre: 'Sofia Ruiz', alias: 'sofi_r', email: 'sofi@mail.com', zonaHoraria: 'America/Argentina/Cordoba' },
+        { nombre: 'Lucia Fernandez', alias: 'luci_f', email: 'luci@mail.com', zonaHoraria: 'America/Argentina/Buenos_Aires', passwordHash: hashPassword('rachas123') },
+        { nombre: 'Martin Gomez', alias: 'martin_g', email: 'martin@mail.com', zonaHoraria: 'America/Argentina/Buenos_Aires', passwordHash: hashPassword('rachas123') },
+        { nombre: 'Sofia Ruiz', alias: 'sofi_r', email: 'sofi@mail.com', zonaHoraria: 'America/Argentina/Cordoba', passwordHash: hashPassword('rachas123') },
       ]);
       const inicio = hoy;
       const fin = sumarDias(hoy, 20);

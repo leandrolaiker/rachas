@@ -3,7 +3,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { setUsuarioId } from './src/api';
+import { setUsuarioId, setAuthToken } from './src/api';
 import { leerSesion, guardarSesion } from './src/storage';
 import { SessionContext } from './src/session';
 import IngresoScreen from './src/screens/IngresoScreen';
@@ -30,19 +30,24 @@ function Tabs() {
 export default function App() {
   const [listo, setListo] = useState(false);
   const [usuarioId, setUsuarioIdState] = useState<string | null>(null);
+  const [token, setTokenState] = useState<string | null>(null);
 
-  async function setSession(id: string | null) {
+  async function setSession(id: string | null, newToken?: string | null) {
     setUsuarioId(id);
+    setAuthToken(newToken ?? null);
     setUsuarioIdState(id);
-    await guardarSesion(id);
+    setTokenState(newToken ?? null);
+    await guardarSesion(id, newToken ?? null);
   }
 
   useEffect(() => {
     (async () => {
       try {
-        const id = await leerSesion();
-        setUsuarioId(id);
-        setUsuarioIdState(id);
+        const ses = await leerSesion();
+        setUsuarioId(ses.id);
+        setAuthToken(ses.token);
+        setUsuarioIdState(ses.id);
+        setTokenState(ses.token);
       } catch (e) {
         console.error('leerSesion failed', e);
       } finally {
@@ -60,7 +65,7 @@ export default function App() {
   }
 
   return (
-    <SessionContext.Provider value={{ usuarioId, setSession }}>
+    <SessionContext.Provider value={{ usuarioId, token, setSession }}>
       <NavigationContainer>
         <Stack.Navigator>
           {usuarioId ? (

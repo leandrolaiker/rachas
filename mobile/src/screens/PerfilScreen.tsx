@@ -90,7 +90,7 @@ export default function PerfilScreen() {
         </View>
       ))}
 
-      <TouchableOpacity style={[estilos.boton, estilos.botonPeligro]} onPress={() => setSession(null)}>
+      <TouchableOpacity style={[estilos.boton, estilos.botonPeligro]} onPress={async () => { try { await personasApi.logout(); } catch {} await setSession(null, null); }}>
         <Text style={estilos.botonTexto}>Cerrar sesion</Text>
       </TouchableOpacity>
     </ScrollView>

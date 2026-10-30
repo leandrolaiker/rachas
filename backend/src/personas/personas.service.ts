@@ -1,9 +1,28 @@
-import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Persona } from './persona.schema';
 import { CrearPersonaDto } from './dto/crear-persona.dto';
 import { ActualizarPersonaDto } from './dto/actualizar-persona.dto';
+import * as crypto from 'crypto';
+
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verificarPasswordHash(password: string, stored: string): boolean {
+  if (!stored) return false;
+  const [salt, hash] = stored.split(':');
+  if (!salt || !hash) return false;
+  const calc = crypto.scryptSync(password, salt, 64).toString('hex');
+  return crypto.timingSafeEqual(Buffer.from(calc, 'hex'), Buffer.from(hash, 'hex'));
+}
+
+function generarToken(): string {
+  return crypto.randomBytes(32).toString('hex');
+}
 
 function zonaValida(zona: string): boolean {
   return /^[A-Za-z]+\/[A-Za-z_+-]+(\/[A-Za-z_+-]+)*$/.test(zona);
@@ -14,6 +33,8 @@ function formatear(persona: any) {
   obj.id = obj._id.toString();
   delete obj._id;
   delete obj.__v;
+  delete obj.passwordHash;
+  delete obj.authToken;
   return obj;
 }
 
@@ -40,6 +61,7 @@ export class PersonasService {
         alias,
         email: datos.email.trim().toLowerCase(),
         zonaHoraria: zona,
+        passwordHash: hashPassword(datos.password),
       });
       return formatear(creada);
     } catch (error: any) {
@@ -76,7 +98,48 @@ export class PersonasService {
       if (!zonaValida(zona)) throw new BadRequestException('Zona horaria invalida');
       persona.zonaHoraria = zona;
     }
+    if (datos.password !== undefined) {
+      persona.passwordHash = hashPassword(datos.password);
+    }
     await persona.save();
     return formatear(persona);
+  }
+
+  async buscarPorAliasOEmail(identificador: string) {
+    const valor = identificador.trim().toLowerCase();
+    return this.modelo.findOne({ $or: [{ alias: identificador.trim() }, { email: valor }] }).exec();
+  }
+
+  async verificarPassword(id: string, password: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(id)) return false;
+    const persona = await this.modelo.findById(id).exec();
+    if (!persona) return false;
+    return verificarPasswordHash(password, (persona as any).passwordHash);
+  }
+
+  async iniciarSesion(id: string): Promise<string> {
+    if (!Types.ObjectId.isValid(id)) throw new BadRequestException('Identificador invalido');
+    const persona = await this.modelo.findById(id).exec();
+    if (!persona) throw new NotFoundException('Persona no encontrada');
+    const token = generarToken();
+    (persona as any).authToken = token;
+    await persona.save();
+    return token;
+  }
+
+  async buscarPorToken(token: string) {
+    if (!token) return null;
+    const persona = await this.modelo.findOne({ authToken: token }).exec();
+    if (!persona) return null;
+    return formatear(persona);
+  }
+
+  async cerrarSesion(token: string) {
+    const persona = await this.modelo.findOne({ authToken: token }).exec();
+    if (persona) {
+      (persona as any).authToken = undefined;
+      await persona.save();
+    }
+    return { ok: true };
   }
 }

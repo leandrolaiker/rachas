@@ -18,4 +18,9 @@ export class CrearPersonaDto {
   @IsString()
   @Matches(/^[A-Za-z]+\/[A-Za-z_+-]+(\/[A-Za-z_+-]+)*$/, { message: 'zonaHoraria debe ser un nombre IANA valido' })
   zonaHoraria?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Length(4, 100)
+  password: string;
 }

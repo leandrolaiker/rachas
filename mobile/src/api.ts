@@ -3,11 +3,18 @@ import * as T from './types';
 const base = (process.env.EXPO_PUBLIC_API_URL as string) || 'http://10.0.2.2:3000';
 
 let usuarioId: string | null = null;
+let authToken: string | null = null;
 export function setUsuarioId(id: string | null) {
   usuarioId = id;
 }
 export function getUsuarioId() {
   return usuarioId;
+}
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+export function getAuthToken() {
+  return authToken;
 }
 
 export class ApiError extends Error {
@@ -21,6 +28,7 @@ export class ApiError extends Error {
 async function request(path: string, options: RequestInit = {}) {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     ...(usuarioId ? { 'x-usuario-id': usuarioId } : {}),
     ...(options.headers as Record<string, string>),
   };
@@ -41,6 +49,8 @@ async function request(path: string, options: RequestInit = {}) {
 
 export const personasApi = {
   crear: (dto: T.CrearPersonaDto) => request('/personas', { method: 'POST', body: JSON.stringify(dto) }) as Promise<T.Persona>,
+  login: (identificador: string, password: string) => request('/auth/login', { method: 'POST', body: JSON.stringify({ identificador, password }) }) as Promise<{ token: string; persona: T.Persona }>,
+  logout: () => request('/auth/logout', { method: 'POST' }) as Promise<{ ok: boolean }>,
   listar: () => request('/personas') as Promise<T.Persona[]>,
   una: (id: string) => request(`/personas/${id}`) as Promise<T.Persona>,
   actualizar: (id: string, dto: T.ActualizarPersonaDto) => request(`/personas/${id}`, { method: 'PATCH', body: JSON.stringify(dto) }) as Promise<T.Persona>,

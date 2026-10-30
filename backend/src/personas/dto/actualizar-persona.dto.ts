@@ -10,4 +10,9 @@ export class ActualizarPersonaDto {
   @IsString()
   @Matches(/^[A-Za-z]+\/[A-Za-z_+-]+(\/[A-Za-z_+-]+)*$/, { message: 'zonaHoraria debe ser un nombre IANA valido' })
   zonaHoraria?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(4, 100)
+  password?: string;
 }

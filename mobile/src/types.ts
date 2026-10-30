@@ -79,6 +79,7 @@ export type CrearPersonaDto = {
   alias: string;
   email: string;
   zonaHoraria?: string;
+  password: string;
 };
 
 export type ActualizarPersonaDto = { nombre?: string; zonaHoraria?: string };

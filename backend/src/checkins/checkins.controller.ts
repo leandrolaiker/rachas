@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Headers, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Req } from '@nestjs/common';
 import { CheckinsService } from './checkins.service';
 import { CrearCheckinDto } from './dto/crear-checkin.dto';
 
@@ -8,11 +8,11 @@ export class CheckinsController {
 
   @Post()
   registrar(
-    @Headers('x-usuario-id') usuarioId: string,
+    @Req() req: any,
     @Param('desafioId') desafioId: string,
     @Body() datos: CrearCheckinDto,
   ) {
-    return this.servicio.registrar(usuarioId, desafioId, datos);
+    return this.servicio.registrar(req.usuarioId, desafioId, datos);
   }
 
   @Get()
@@ -31,7 +31,7 @@ export class CheckinsController {
   }
 
   @Delete('ultimo')
-  deshacer(@Headers('x-usuario-id') usuarioId: string, @Param('desafioId') desafioId: string) {
-    return this.servicio.deshacer(usuarioId, desafioId);
+  deshacer(@Req() req: any, @Param('desafioId') desafioId: string) {
+    return this.servicio.deshacer(req.usuarioId, desafioId);
   }
 }

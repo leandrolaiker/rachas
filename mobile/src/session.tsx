@@ -1,11 +1,12 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext } from 'react';
 
 export type SessionContextType = {
   usuarioId: string | null;
-  setSession: (id: string | null) => Promise<void>;
+  token: string | null;
+  setSession: (id: string | null, token?: string | null) => Promise<void>;
 };
 
-export const SessionContext = createContext<SessionContextType>({ usuarioId: null, setSession: async () => {} });
+export const SessionContext = createContext<SessionContextType>({ usuarioId: null, token: null, setSession: async () => {} });
 export function useSession() {
   return useContext(SessionContext);
 }
