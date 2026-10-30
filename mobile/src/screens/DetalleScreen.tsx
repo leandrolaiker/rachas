@@ -2,11 +2,12 @@ import React, { useContext, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSession } from '../session';
 import { desafiosApi, checkinsApi } from '../api';
+import { connectSocket, getSocket } from '../socket';
 import type { Desafio, Persona, RankingItem, Checkin, RachasInfo } from '../types';
 
 export default function DetalleScreen({ route, navigation }: any) {
   const { id } = route.params;
-  const { usuarioId } = useSession();
+  const { usuarioId, token } = useSession();
   const [desafio, setDesafio] = useState<Desafio | null>(null);
   const [participantes, setParticipantes] = useState<Persona[]>([]);
   const [ranking, setRanking] = useState<RankingItem[]>([]);
@@ -50,6 +51,27 @@ export default function DetalleScreen({ route, navigation }: any) {
   }
 
   useEffect(() => { cargar(); }, [id, usuarioId]);
+  useEffect(() => {
+    if (!usuarioId || !token) return;
+    const s = connectSocket(token);
+    const join = () => s.emit('unirse_desafio', { desafioId: id });
+    const reload = () => { cargar(); };
+    const events = ['checkin_registrado', 'checkin_deshcho', 'ranking_actualizado', 'participante_unido', 'participante_abandono', 'desafio_cancelado'];
+    const onConnect = () => join();
+    s.on('connect', onConnect);
+    join();
+    events.forEach((e) => s.on(e, reload));
+    const onAliento = (data: any) => {
+      if (data?.paraPersonaId === usuarioId) Alert.alert('Aliento', `${data.deAlias || 'Alguien'} te envio ${data.emoji}`);
+    };
+    s.on('aliento', onAliento);
+    return () => {
+      s.emit('salir_desafio', { desafioId: id });
+      s.off('connect', onConnect);
+      events.forEach((e) => s.off(e, reload));
+      s.off('aliento', onAliento);
+    };
+  }, [id, usuarioId, token]);
 
   async function checkin() {
     if (!usuarioId) return;
@@ -161,7 +183,17 @@ export default function DetalleScreen({ route, navigation }: any) {
         <Text style={estilos.sub}>Participantes</Text>
         {participantes.length === 0 ? <Text style={estilos.linea}>Sin participantes.</Text> : null}
         {participantes.map((p) => (
-          <Text key={p.id} style={estilos.linea}>{p.nombre} (@{p.alias})</Text>
+          <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={estilos.linea}>{p.nombre} (@{p.alias})</Text>
+            {usuarioId && p.id !== usuarioId ? (
+              <TouchableOpacity onPress={() => {
+                const s = getSocket();
+                if (s) s.emit('aliento', { desafioId: id, paraPersonaId: p.id, emoji: '👏' });
+              }}>
+                <Text style={{ fontSize: 18 }}>👏</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         ))}
       </View>
 

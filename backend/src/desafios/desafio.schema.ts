@@ -32,3 +32,4 @@ export class Desafio extends Document {
 }
 
 export const DesafioSchema = SchemaFactory.createForClass(Desafio);
+DesafioSchema.index({ codigo: 1 }, { unique: true });

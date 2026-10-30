@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { setUsuarioId, setAuthToken } from './src/api';
+import { connectSocket, disconnectSocket } from './src/socket';
 import { leerSesion, guardarSesion } from './src/storage';
 import { SessionContext } from './src/session';
 import IngresoScreen from './src/screens/IngresoScreen';
@@ -48,6 +49,7 @@ export default function App() {
         setAuthToken(ses.token);
         setUsuarioIdState(ses.id);
         setTokenState(ses.token);
+        if (ses.token) connectSocket(ses.token);
       } catch (e) {
         console.error('leerSesion failed', e);
       } finally {
@@ -55,6 +57,11 @@ export default function App() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (token) connectSocket(token);
+    else disconnectSocket();
+  }, [token]);
 
   if (!listo) {
     return (

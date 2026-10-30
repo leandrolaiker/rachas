@@ -55,6 +55,8 @@ export function formatearId(doc: any) {
   obj.id = obj._id.toString();
   delete obj._id;
   delete obj.__v;
+  delete obj.passwordHash;
+  delete obj.authToken;
   return obj;
 }
 

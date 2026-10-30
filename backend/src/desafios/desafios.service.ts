@@ -7,6 +7,7 @@ import { Participacion } from '../participaciones/participacion.schema';
 import { Checkin } from '../checkins/checkin.schema';
 import { CrearDesafioDto } from './dto/crear-desafio.dto';
 import { aDia, calcularEstado, diferenciaDias, formatearId, hoyDia, hoyEnZona, calcularRachas } from '../common/ayudas';
+import { RealtimeService } from '../realtime/realtime.service';
 
 function codigoNuevo(): string {
   const letras = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -32,6 +33,7 @@ export class DesafiosService {
     @InjectModel(Persona.name) private personas: Model<Persona>,
     @InjectModel(Participacion.name) private partes: Model<Participacion>,
     @InjectModel(Checkin.name) private checkins: Model<Checkin>,
+    private realtime: RealtimeService,
   ) {}
 
   private async personaOr404(id: string) {
@@ -176,6 +178,7 @@ export class DesafiosService {
     desafio.cancelado = true;
     await desafio.save();
     const cantidad = await this.partes.countDocuments({ desafioId: desafio._id, activa: true }).exec();
+    this.realtime.emit(desafio._id.toString(), 'desafio_cancelado', {});
     return presentar(desafio, cantidad);
   }
 
@@ -196,6 +199,7 @@ export class DesafiosService {
     const vigentes = await this.vigentesDe(persona._id.toString());
     if (vigentes >= 5) throw new ConflictException('No podes tener mas de 5 desafios vigentes');
     await this.partes.create({ desafioId: desafio._id, personaId: persona._id, activa: true, fechaUnion: new Date() });
+    this.realtime.emit(desafio._id.toString(), 'participante_unido', { personaId: persona._id.toString(), alias: persona.alias });
     return presentar(desafio, cantidad + 1);
   }
 
@@ -208,6 +212,7 @@ export class DesafiosService {
     parte.activa = false;
     parte.fechaAbandono = new Date();
     await parte.save();
+    this.realtime.emit(desafio._id.toString(), 'participante_abandono', { personaId: persona._id.toString() });
     return { ok: true };
   }
 

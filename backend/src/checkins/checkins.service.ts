@@ -7,6 +7,8 @@ import { Persona } from '../personas/persona.schema';
 import { Participacion } from '../participaciones/participacion.schema';
 import { CrearCheckinDto } from './dto/crear-checkin.dto';
 import { calcularEstado, formatearId, sumarDias, hoyEnZona, calcularRachas, rachaEnDia, bonusPorRacha } from '../common/ayudas';
+import { RealtimeService } from '../realtime/realtime.service';
+import { DesafiosService } from '../desafios/desafios.service';
 
 @Injectable()
 export class CheckinsService {
@@ -15,6 +17,8 @@ export class CheckinsService {
     @InjectModel(Desafio.name) private desafios: Model<Desafio>,
     @InjectModel(Persona.name) private personas: Model<Persona>,
     @InjectModel(Participacion.name) private partes: Model<Participacion>,
+    private realtime: RealtimeService,
+    private desafiosService: DesafiosService,
   ) {}
 
   private async personaOr404(id: string) {
@@ -61,6 +65,9 @@ export class CheckinsService {
         valor: datos.valor,
         puntos,
       });
+       this.realtime.emit(desafio._id.toString(), 'checkin_registrado', { personaId: persona._id.toString(), alias: persona.alias, dia, puntos });
+       const ranking = await this.desafiosService.ranking(desafio._id.toString());
+       this.realtime.emit(desafio._id.toString(), 'ranking_actualizado', { ranking });
       return formatearId(creado);
     } catch (error: any) {
       if (error?.code === 11000) throw new ConflictException('Ya registraste ese dia');
@@ -105,6 +112,9 @@ export class CheckinsService {
     const hoy = hoyEnZona(zona);
     if (ultimo.dia !== hoy) throw new ConflictException('Solo se puede deshacer el check-in de hoy');
     await ultimo.deleteOne();
+     this.realtime.emit(desafio._id.toString(), 'checkin_deshcho', { personaId: persona._id.toString(), dia: ultimo.dia });
+     const ranking = await this.desafiosService.ranking(desafio._id.toString());
+     this.realtime.emit(desafio._id.toString(), 'ranking_actualizado', { ranking });
     return { ok: true };
   }
 }

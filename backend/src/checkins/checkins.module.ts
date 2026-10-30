@@ -6,6 +6,7 @@ import { Persona, PersonaSchema } from '../personas/persona.schema';
 import { Participacion, ParticipacionSchema } from '../participaciones/participacion.schema';
 import { CheckinsService } from './checkins.service';
 import { CheckinsController } from './checkins.controller';
+import { DesafiosModule } from '../desafios/desafios.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { CheckinsController } from './checkins.controller';
       { name: Persona.name, schema: PersonaSchema },
       { name: Participacion.name, schema: ParticipacionSchema },
     ]),
+    DesafiosModule,
   ],
   controllers: [CheckinsController],
   providers: [CheckinsService],

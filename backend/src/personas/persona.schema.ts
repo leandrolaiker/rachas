@@ -23,3 +23,5 @@ export class Persona extends Document {
 }
 
 export const PersonaSchema = SchemaFactory.createForClass(Persona);
+PersonaSchema.index({ alias: 1 }, { unique: true });
+PersonaSchema.index({ email: 1 }, { unique: true });

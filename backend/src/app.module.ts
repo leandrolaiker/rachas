@@ -7,6 +7,7 @@ import { DesafiosModule } from './desafios/desafios.module';
 import { ParticipacionesModule } from './participaciones/participaciones.module';
 import { CheckinsModule } from './checkins/checkins.module';
 import { AuthModule } from './auth/auth.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { AuthGuard } from './auth/auth.guard';
 import { SeedService } from './seed/seed.service';
 import { Persona, PersonaSchema } from './personas/persona.schema';
@@ -36,6 +37,7 @@ import { Checkin, CheckinSchema } from './checkins/checkin.schema';
     ParticipacionesModule,
     CheckinsModule,
     AuthModule,
+    RealtimeModule,
   ],
   providers: [SeedService, { provide: APP_GUARD, useClass: AuthGuard }],
 })
