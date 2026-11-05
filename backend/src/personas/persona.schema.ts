@@ -6,8 +6,8 @@ export class Persona extends Document {
   @Prop({ required: true, trim: true })
   nombre: string;
 
-  @Prop({ required: true, unique: true, trim: true })
-  alias: string;
+  @Prop({ unique: true, sparse: true, trim: true })
+  alias?: string;
 
   @Prop({ required: true, unique: true, trim: true, lowercase: true })
   email: string;
@@ -15,13 +15,20 @@ export class Persona extends Document {
   @Prop({ required: true, default: 'America/Argentina/Buenos_Aires' })
   zonaHoraria: string;
 
-  @Prop({ required: true })
-  passwordHash: string;
+  @Prop({ unique: true, sparse: true })
+  firebaseUid?: string;
+
+  @Prop()
+  proveedor?: string;
+
+  @Prop()
+  passwordHash?: string;
 
   @Prop()
   authToken?: string;
 }
 
 export const PersonaSchema = SchemaFactory.createForClass(Persona);
-PersonaSchema.index({ alias: 1 }, { unique: true });
+PersonaSchema.index({ alias: 1 }, { unique: true, sparse: true });
 PersonaSchema.index({ email: 1 }, { unique: true });
+PersonaSchema.index({ firebaseUid: 1 }, { unique: true, sparse: true });

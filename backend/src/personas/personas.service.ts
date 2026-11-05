@@ -127,6 +127,34 @@ export class PersonasService {
     return token;
   }
 
+  async buscarPorFirebaseUid(uid: string) {
+    if (!uid) return null;
+    const persona = await this.modelo.findOne({ firebaseUid: uid }).exec();
+    if (!persona) return null;
+    return formatear(persona);
+  }
+
+  async obtenerOCrearDesdeFirebase(datos: { firebaseUid: string; email: string; nombre?: string; proveedor?: string }) {
+    let persona = await this.modelo.findOne({ firebaseUid: datos.firebaseUid }).exec();
+    if (!persona) {
+      persona = await this.modelo.findOne({ email: datos.email.toLowerCase() }).exec();
+      if (persona) {
+        (persona as any).firebaseUid = datos.firebaseUid;
+        if (datos.proveedor) (persona as any).proveedor = datos.proveedor;
+        await persona.save();
+      } else {
+        persona = await this.modelo.create({
+          nombre: (datos.nombre || datos.email.split('@')[0]).trim(),
+          email: datos.email.toLowerCase().trim(),
+          zonaHoraria: 'America/Argentina/Buenos_Aires',
+          firebaseUid: datos.firebaseUid,
+          proveedor: datos.proveedor,
+        });
+      }
+    }
+    return formatear(persona);
+  }
+
   async buscarPorToken(token: string) {
     if (!token) return null;
     const persona = await this.modelo.findOne({ authToken: token }).exec();

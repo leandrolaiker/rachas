@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable, SetMetadata, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PersonasService } from '../personas/personas.service';
+import { adminAuth } from '../firebase/admin';
 
 export const Public = () => SetMetadata('isPublic', true);
 
@@ -22,12 +23,24 @@ export class AuthGuard implements CanActivate {
       : (typeof header === 'string' ? header.trim() : '');
     if (!token) throw new UnauthorizedException('Token requerido');
 
-    const persona = await this.personas.buscarPorToken(token);
-    if (!persona) throw new UnauthorizedException('Token invalido');
+    let decoded: any;
+    try {
+      decoded = await adminAuth.verifyIdToken(token, true);
+    } catch (e) {
+      throw new UnauthorizedException('Token invalido o vencido');
+    }
+
+    const persona = await this.personas.obtenerOCrearDesdeFirebase({
+      firebaseUid: decoded.uid,
+      email: decoded.email || '',
+      nombre: decoded.name || decoded.email ? decoded.email.split('@')[0] : '',
+      proveedor: decoded.firebase.sign_in_provider || 'google.com',
+    });
 
     req.token = token;
     req.usuarioId = persona.id;
     req.persona = persona;
+    req.firebasePayload = decoded;
     return true;
   }
 }

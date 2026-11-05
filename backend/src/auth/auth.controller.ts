@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Post, UnauthorizedException, Req } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Public } from './auth.guard';
 
@@ -8,8 +8,9 @@ export class AuthController {
 
   @Public()
   @Post('login')
-  login(@Body() body: { identificador: string; password: string }) {
-    return this.auth.login(body.identificador, body.password);
+  async login(@Body() body: { identificador: string; password: string }) {
+    // Social login (Google) aplica el AuthGuard. Este endpoint queda para compatibilidad.
+    throw new UnauthorizedException('Solo login social ahora');
   }
 
   @Get('me')
