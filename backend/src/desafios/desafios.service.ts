@@ -6,7 +6,7 @@ import { Persona } from '../personas/persona.schema';
 import { Participacion } from '../participaciones/participacion.schema';
 import { Checkin } from '../checkins/checkin.schema';
 import { CrearDesafioDto } from './dto/crear-desafio.dto';
-import { aDia, calcularEstado, diferenciaDias, formatearId, hoyDia, hoyEnZona, calcularRachas } from '../common/ayudas';
+import { aDia, calcularEstado, calcularEstadoEnZona, diferenciaDias, formatearId, hoyDia, hoyEnZona, calcularRachas } from '../common/ayudas';
 import { RealtimeService } from '../realtime/realtime.service';
 
 function codigoNuevo(): string {
@@ -248,7 +248,7 @@ export class DesafiosService {
     const hoy = hoyEnZona(zona);
     const salida: any[] = [];
     for (const d of desafios) {
-      const estado = calcularEstado(d.inicio, d.fin, d.cancelado);
+      const estado = calcularEstadoEnZona(d.inicio, d.fin, d.cancelado, zona);
       if (estado !== 'PROGRAMADO' && estado !== 'ACTIVO') continue;
       const checkins = await this.checkins.find({ desafioId: d._id, personaId: persona._id }).exec();
       const dias = checkins.map((c: any) => c.dia);

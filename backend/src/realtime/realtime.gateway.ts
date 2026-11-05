@@ -33,8 +33,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     private realtime: RealtimeService,
   ) {}
 
-  afterInit() {
-    this.realtime.setServer(this.server);
+  afterInit(server: Server) {
+    this.realtime.setServer(server);
   }
 
   async handleConnection(client: Socket) {
