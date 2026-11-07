@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
+import { getToken } from './api';
 
-const base = (process.env.EXPO_PUBLIC_WS_URL as string) || (process.env.EXPO_PUBLIC_API_URL as string) || 'http://10.0.2.2:3000';
+const base = (process.env.EXPO_PUBLIC_WS_URL as string) || (process.env.EXPO_PUBLIC_API_URL as string) || 'http://localhost:3000';
 
 let socket: Socket | null = null;
 
@@ -8,14 +9,15 @@ export function getSocket(): Socket | null {
   return socket;
 }
 
-export function connectSocket(token: string): Socket {
+export async function connectSocket(): Promise<Socket> {
   if (socket && socket.connected) return socket;
   if (socket) {
     socket.disconnect();
     socket = null;
   }
+  const token = await getToken();
   socket = io(base, {
-    auth: { token },
+    auth: { token: token ?? '' },
     transports: ['websocket', 'polling'],
     reconnection: true,
   });

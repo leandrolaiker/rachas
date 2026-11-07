@@ -1,46 +1,56 @@
-import { CanActivate, ExecutionContext, Injectable, SetMetadata, UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  createParamDecorator,
+  SetMetadata,
+} from '@nestjs/common';
+import type { Request } from 'express';
 import { Reflector } from '@nestjs/core';
-import { PersonasService } from '../personas/personas.service';
-import { adminAuth } from '../firebase/admin';
+import type { Types } from 'mongoose';
+import type { Persona } from '../personas/persona.schema';
+import { TokenService } from './token.service';
+import { PersonaAuthService } from './persona-auth.service';
+
+export interface PeticionAutenticada extends Request {
+  persona: Persona & { _id: Types.ObjectId };
+}
 
 export const Public = () => SetMetadata('isPublic', true);
 
+export const UsuarioId = createParamDecorator(
+  (_: unknown, contexto: ExecutionContext): string => {
+    return String(contexto.switchToHttp().getRequest<PeticionAutenticada>().persona._id);
+  },
+);
+
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private reflector: Reflector, private personas: PersonasService) {}
+  constructor(
+    private readonly tokens: TokenService,
+    private readonly personas: PersonaAuthService,
+    private readonly reflector: Reflector,
+  ) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  async canActivate(contexto: ExecutionContext): Promise<boolean> {
+    if (contexto.getType() !== 'http') return true;
+
     const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
-      context.getHandler(),
-      context.getClass(),
+      contexto.getHandler(),
+      contexto.getClass(),
     ]);
     if (isPublic) return true;
 
-    const req = context.switchToHttp().getRequest();
-    const header = req.headers['authorization'] || req.headers['x-auth-token'];
-    const token = typeof header === 'string' && header.startsWith('Bearer ')
-      ? header.slice(7).trim()
-      : (typeof header === 'string' ? header.trim() : '');
-    if (!token) throw new UnauthorizedException('Token requerido');
+    const request = contexto.switchToHttp().getRequest<PeticionAutenticada>();
+    const token = /^Bearer ([^\s]+)$/i.exec(request.headers.authorization ?? '')?.[1] ?? '';
 
-    let decoded: any;
-    try {
-      decoded = await adminAuth.verifyIdToken(token, true);
-    } catch (e) {
-      throw new UnauthorizedException('Token invalido o vencido');
+    request.persona = await this.personas.resolver(await this.tokens.verificar(token), token) as unknown as Persona & { _id: Types.ObjectId };
+
+    if (!request.persona.alias && !/^\/me(?:\/alias)?\/?$/.test(request.path)) {
+      throw new ForbiddenException('Elegí un alias para completar tu perfil');
     }
 
-    const persona = await this.personas.obtenerOCrearDesdeFirebase({
-      firebaseUid: decoded.uid,
-      email: decoded.email || '',
-      nombre: decoded.name || decoded.email ? decoded.email.split('@')[0] : '',
-      proveedor: decoded.firebase.sign_in_provider || 'google.com',
-    });
-
-    req.token = token;
-    req.usuarioId = persona.id;
-    req.persona = persona;
-    req.firebasePayload = decoded;
     return true;
   }
 }

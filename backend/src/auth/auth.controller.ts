@@ -1,25 +1,35 @@
-import { Body, Controller, Get, Post, UnauthorizedException, Req } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { Public } from './auth.guard';
+import { Body, Controller, Get, Patch, Req } from '@nestjs/common';
+import { Transform } from 'class-transformer';
+import { IsString, Matches } from 'class-validator';
+import type { PeticionAutenticada } from './auth.guard';
+import { UsuarioId } from './auth.guard';
+import { PersonaAuthService } from './persona-auth.service';
+import { PersonasService } from '../personas/personas.service';
+import { ActualizarPersonaDto } from '../personas/dto/actualizar-persona.dto';
 
-@Controller('auth')
+class AliasDto {
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
+  @IsString()
+  @Matches(/^[a-z0-9_]{3,20}$/)
+  alias: string;
+}
+
+@Controller('me')
 export class AuthController {
-  constructor(private auth: AuthService) {}
+  constructor(private readonly personas: PersonaAuthService, private readonly perfiles: PersonasService) {}
 
-  @Public()
-  @Post('login')
-  async login(@Body() body: { identificador: string; password: string }) {
-    // Social login (Google) aplica el AuthGuard. Este endpoint queda para compatibilidad.
-    throw new UnauthorizedException('Solo login social ahora');
+  @Get()
+  me(@Req() request: PeticionAutenticada) {
+    return request.persona;
   }
 
-  @Get('me')
-  me(@Req() req: any) {
-    return this.auth.me(req.token);
+  @Patch()
+  editar(@UsuarioId() id: string, @Body() dto: ActualizarPersonaDto) {
+    return this.perfiles.actualizar(id, dto);
   }
 
-  @Post('logout')
-  logout(@Req() req: any) {
-    return this.auth.logout(req.token);
+  @Patch('alias')
+  alias(@UsuarioId() id: string, @Body() dto: AliasDto) {
+    return this.personas.alias(id, dto.alias);
   }
 }

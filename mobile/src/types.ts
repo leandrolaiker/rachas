@@ -1,5 +1,6 @@
 export type Persona = {
   id: string;
+  _id?: string;
   nombre: string;
   alias: string;
   email: string;

@@ -1,8 +1,8 @@
-import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Req } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Patch, Post } from '@nestjs/common';
 import { PersonasService } from './personas.service';
 import { CrearPersonaDto } from './dto/crear-persona.dto';
 import { ActualizarPersonaDto } from './dto/actualizar-persona.dto';
-import { Public } from '../auth/auth.guard';
+import { Public, UsuarioId } from '../auth/auth.guard';
 
 @Controller('personas')
 export class PersonasController {
@@ -27,8 +27,8 @@ export class PersonasController {
   }
 
   @Patch(':id')
-  actualizar(@Param('id') id: string, @Body() datos: ActualizarPersonaDto, @Req() req: any) {
-    if (req.usuarioId !== id) throw new ForbiddenException('No autorizado');
+  actualizar(@Param('id') id: string, @Body() datos: ActualizarPersonaDto, @UsuarioId() usuarioId: string) {
+    if (usuarioId !== id) throw new ForbiddenException('No autorizado');
     return this.servicio.actualizar(id, datos);
   }
 }

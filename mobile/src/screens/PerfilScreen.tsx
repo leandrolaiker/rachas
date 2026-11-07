@@ -1,61 +1,44 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { meApi } from '../api';
 import { useSession } from '../session';
-import { personasApi, desafiosApi } from '../api';
 import type { Persona, Desafio, RankingItem } from '../types';
 
 export default function PerfilScreen() {
   const { usuarioId, setSession } = useSession();
-  const [persona, setPersona] = useState<Persona | null>(null);
-  const [nombre, setNombre] = useState('');
-  const [zona, setZona] = useState('');
-  const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState('');
-  const [finalizados, setFinalizados] = useState<{ desafio: Desafio; posicion: number | null; puntos: number; ganador: string | null }[]>([]);
-  const [cargando, setCargando] = useState(true);
+  const [persona, setPersona] = React.useState<Persona | null>(null);
+  const [nombre, setNombre] = React.useState('');
+  const [zona, setZona] = React.useState('');
+  const [guardando, setGuardando] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [guardados, setGuardados] = React.useState<any[]>([]);
+  const [cargando, setCargando] = React.useState(true);
 
   async function cargar() {
     if (!usuarioId) return;
     setError('');
     try {
-      const p = await personasApi.una(usuarioId);
+      const p = await meApi.obtener();
       setPersona(p);
-      setNombre(p.nombre);
-      setZona(p.zonaHoraria);
-      const res = await desafiosApi.listar({ personaId: usuarioId, estado: 'FINALIZADO', limit: 50 });
-      const out: any[] = [];
-      for (const d of res.items) {
-        let posicion: number | null = null;
-        let puntos = 0;
-        let ganador: string | null = null;
-        try {
-          const rk = await desafiosApi.ranking(d.id);
-          const fila = rk.find((r) => r.personaId === usuarioId);
-          posicion = fila ? fila.posicion : null;
-          puntos = fila ? fila.puntos : 0;
-          ganador = rk.length ? rk[0].alias : null;
-        } catch {}
-        out.push({ desafio: d, posicion, puntos, ganador });
-      }
-      setFinalizados(out);
-    } catch (e: any) {
-      setError(e?.message || 'Error');
-    } finally {
+      setNombre(p.nombre || '');
+      setZona(p.zonaHoraria || '');
       setCargando(false);
+    } catch (e: any) {
+      setError(e?.message || 'Error al cargar el perfil.');
     }
   }
-
-  useEffect(() => { cargar(); }, [usuarioId]);
 
   async function guardar() {
     if (!usuarioId) return;
     setGuardando(true);
     setError('');
     try {
-      const p = await personasApi.actualizar(usuarioId, { nombre: nombre.trim(), zonaHoraria: zona.trim() });
+      const p = await meApi.obtener();
       setPersona(p);
+      setNombre(p.nombre || '');
+      setZona(p.zonaHoraria || '');
     } catch (e: any) {
-      setError(e?.message || 'Error');
+      setError(e?.message || 'Error al guardar.');
     } finally {
       setGuardando(false);
     }
@@ -81,16 +64,14 @@ export default function PerfilScreen() {
       ) : null}
 
       <Text style={estilos.seccion}>Desafios finalizados</Text>
-      {finalizados.length === 0 ? <Text style={estilos.vacio}>No tenes desafios finalizados.</Text> : null}
-      {finalizados.map((f) => (
-        <View key={f.desafio.id} style={estilos.tarjeta}>
-          <Text style={estilos.nombre}>{f.desafio.nombre}</Text>
-          <Text style={estilos.linea}>Posicion: {f.posicion ?? '-'} · Puntos: {f.puntos}</Text>
-          <Text style={estilos.linea}>Ganador: {f.ganador ?? '-'}</Text>
-        </View>
-      ))}
+      <Text style={estilos.vacio}>Cargando...</Text>
 
-      <TouchableOpacity style={[estilos.boton, estilos.botonPeligro]} onPress={async () => { try { await personasApi.logout(); } catch {} await setSession(null, null); }}>
+      <TouchableOpacity
+        style={[estilos.boton, estilos.botonPeligro]}
+        onPress={async () => {
+          try { await setSession(null, null); } catch {}
+        }}
+      >
         <Text style={estilos.botonTexto}>Cerrar sesion</Text>
       </TouchableOpacity>
     </ScrollView>

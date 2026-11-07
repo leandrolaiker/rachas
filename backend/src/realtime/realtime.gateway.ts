@@ -1,129 +1,89 @@
-import {
-  OnGatewayConnection,
-  OnGatewayDisconnect,
-  SubscribeMessage,
-  WebSocketGateway,
-  WebSocketServer,
-  WsException,
-} from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { Persona } from '../personas/persona.schema';
-import { Participacion } from '../participaciones/participacion.schema';
+import { OnGatewayInit, WebSocketGateway, SubscribeMessage, ConnectedSocket, MessageBody } from '@nestjs/websockets';
+import { BadRequestException, HttpException, UnauthorizedException } from '@nestjs/common';
+import type { Server, Socket } from 'socket.io';
+import { TokenService } from '../auth/token.service';
+import { PersonaAuthService } from '../auth/persona-auth.service';
 import { RealtimeService } from './realtime.service';
 
-const ALIENTO_EMOJIS = ['👏', '🔥', '💪', '⭐', '🎉'];
-
-@WebSocketGateway({ cors: { origin: '*' } })
-@Injectable()
-export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
-  @WebSocketServer()
-  server: Server;
-
-  private readonly logger = new Logger(RealtimeGateway.name);
-  private readonly ultimoAliento = new Map<string, number>();
-  private readonly personasPorSocket = new Map<string, string>();
-  private readonly aliasPorSocket = new Map<string, string>();
-
+@WebSocketGateway({ maxHttpBufferSize: 4096, cors: { origin: '*' } })
+export class RealtimeGateway implements OnGatewayInit {
   constructor(
-    @InjectModel(Persona.name) private personas: Model<Persona>,
-    @InjectModel(Participacion.name) private partes: Model<Participacion>,
-    private realtime: RealtimeService,
+    private readonly tokens: TokenService,
+    private readonly personas: PersonaAuthService,
+    private readonly realtime: RealtimeService,
   ) {}
 
-  afterInit(server: Server) {
-    this.realtime.setServer(server);
+  afterInit(servidor: Server) {
+    this.realtime.setServer(servidor);
+    servidor.use(async (socket, next) => {
+      try {
+        const token: unknown = socket.handshake.auth.token;
+        const identidad = await this.tokens.verificar(token);
+        const persona = await this.personas.resolver(identidad, String(token));
+        if (!persona.alias) throw new UnauthorizedException('Completá tu alias antes de conectar');
+        socket.data.personaId = String(persona._id);
+        socket.data.nombre = persona.nombre;
+        socket.data.expira = identidad.expira;
+        next();
+      } catch (e) {
+        const autorizado = e instanceof UnauthorizedException;
+        next(Object.assign(new Error(autorizado ? 'La sesión venció o no es válida' : 'No se pudo conectar. Volvé a intentar'),
+          { data: { codigo: autorizado ? 'NO_AUTORIZADO' : 'SERVICIO_NO_DISPONIBLE' } }));
+      }
+    });
+    servidor.on('connection', socket => {
+      const duracion = Math.max(0, socket.data.expira * 1000 - Date.now());
+      const timer = setTimeout(() => {
+        socket.emit('sesion.vencida');
+        socket.disconnect(true);
+      }, Math.min(duracion, 2_147_483_647));
+      socket.once('disconnect', () => clearTimeout(timer));
+    });
   }
 
-  async handleConnection(client: Socket) {
-    try {
-      const token =
-        (client.handshake.auth && (client.handshake.auth as any).token) ||
-        (client.handshake.headers.authorization as string)?.replace(/^Bearer\s+/i, '') ||
-        (client.handshake.headers['x-auth-token'] as string);
-      if (!token) throw new Error('sin token');
-      const persona = await this.personas.findOne({ authToken: token }).exec();
-      if (!persona) throw new Error('token invalido');
-      this.personasPorSocket.set(client.id, persona._id.toString());
-      this.aliasPorSocket.set(client.id, persona.alias);
-      this.logger.log(`ws conectado ${persona.alias}`);
-    } catch (e) {
-      this.logger.warn(`ws rechazado: ${(e as Error).message}`);
-      client.emit('error', { message: 'No autorizado' });
-      client.disconnect(true);
-    }
+  private datos(socket: Socket, entrada: unknown): Record<string, unknown> {
+    if (socket.data.expira * 1000 <= Date.now()) throw new UnauthorizedException('La sesión venció. Volvé a ingresar');
+    if (!entrada || typeof entrada !== 'object' || Array.isArray(entrada)) throw new BadRequestException('El mensaje no es válido');
+    return entrada as Record<string, unknown>;
   }
 
-  handleDisconnect(client: Socket) {
-    this.personasPorSocket.delete(client.id);
-    this.aliasPorSocket.delete(client.id);
-  }
-
-  private async resolverPersona(client: Socket): Promise<string | undefined> {
-    let personaId = this.personasPorSocket.get(client.id);
-    if (personaId) return personaId;
-    const token =
-      (client.handshake.auth && (client.handshake.auth as any).token) ||
-      (client.handshake.headers.authorization as string)?.replace(/^Bearer\\s+/i, '') ||
-      (client.handshake.headers['x-auth-token'] as string);
-    if (!token) return undefined;
-    const persona = await this.personas.findOne({ authToken: token }).exec();
-    if (!persona) return undefined;
-    this.personasPorSocket.set(client.id, persona._id.toString());
-    this.aliasPorSocket.set(client.id, persona.alias);
-    return persona._id.toString();
+  private error(e: unknown) {
+    return { ok: false as const, error: { codigo: 'OPERACION_RECHAZADA', mensaje: e instanceof HttpException ? e.message : 'No se pudo completar la operación. Volvé a intentar' } };
   }
 
   @SubscribeMessage('unirse_desafio')
-  async handleJoin(client: Socket, payload: { desafioId: string }) {
-    const personaId = await this.resolverPersona(client);
-    const desafioId = payload?.desafioId;
-    this.logger.log(`join client=${client.id} persona=${personaId} desafio=${desafioId}`);
-    if (!personaId || !desafioId || !Types.ObjectId.isValid(desafioId)) {
-      throw new WsException('Datos invalidos');
+  async handleJoin(@ConnectedSocket() socket: Socket, @MessageBody() entrada: unknown) {
+    try {
+      const datos = this.datos(socket, entrada);
+      if (typeof datos.desafioId !== 'string') throw new BadRequestException('Indicá el desafío');
+      await socket.join(`desafio:${datos.desafioId}`);
+      socket.emit('suscripto', { desafioId: datos.desafioId });
+      return { ok: true };
+    } catch (e) {
+      return this.error(e);
     }
-    const parte = await this.partes.findOne({ desafioId: new Types.ObjectId(desafioId), personaId: new Types.ObjectId(personaId), activa: true }).exec();
-    if (!parte) throw new WsException('No participas en este desafio');
-    await client.join(`desafio:${desafioId}`);
-    client.emit('suscripto', { desafioId });
-    return { ok: true };
   }
 
   @SubscribeMessage('salir_desafio')
-  async handleLeave(client: Socket, payload: { desafioId: string }) {
-    const desafioId = payload?.desafioId;
-    if (desafioId) await client.leave(`desafio:${desafioId}`);
-    return { ok: true };
+  async handleLeave(@ConnectedSocket() socket: Socket, @MessageBody() entrada: unknown) {
+    try {
+      const datos = this.datos(socket, entrada);
+      if (typeof datos.desafioId === 'string') await socket.leave(`desafio:${datos.desafioId}`);
+      return { ok: true };
+    } catch (e) {
+      return this.error(e);
+    }
   }
 
   @SubscribeMessage('aliento')
-  async handleAliento(client: Socket, payload: { desafioId: string; paraPersonaId: string; emoji: string }) {
-    const dePersonaId = await this.resolverPersona(client);
-    const alias = this.aliasPorSocket.get(client.id);
-    const { desafioId, paraPersonaId, emoji } = payload || ({} as any);
-    if (!dePersonaId || !desafioId || !paraPersonaId) throw new WsException('Datos invalidos');
-    if (!Types.ObjectId.isValid(desafioId) || !Types.ObjectId.isValid(paraPersonaId)) throw new WsException('Datos invalidos');
-    if (!ALIENTO_EMOJIS.includes(emoji)) throw new WsException('Emoji no permitido');
-    if (dePersonaId === paraPersonaId) throw new WsException('No podes alentarte a vos mismo');
-    const [origen, destino] = await Promise.all([
-      this.partes.findOne({ desafioId: new Types.ObjectId(desafioId), personaId: new Types.ObjectId(dePersonaId), activa: true }).exec(),
-      this.partes.findOne({ desafioId: new Types.ObjectId(desafioId), personaId: new Types.ObjectId(paraPersonaId), activa: true }).exec(),
-    ]);
-    if (!origen || !destino) throw new WsException('Ambos deben participar del desafio');
-    const clave = `${dePersonaId}:${desafioId}`;
-    const ahora = Date.now();
-    const ultimo = this.ultimoAliento.get(clave) || 0;
-    if (ahora - ultimo < 10000) throw new WsException('Espera 10 segundos entre alientos');
-    this.ultimoAliento.set(clave, ahora);
-    this.server.to(`desafio:${desafioId}`).emit('aliento', {
-      desafioId,
-      dePersonaId,
-      deAlias: alias,
-      paraPersonaId,
-      emoji,
-    });
-    return { ok: true };
+  async handleAliento(@ConnectedSocket() socket: Socket, @MessageBody() entrada: unknown) {
+    try {
+      const datos = this.datos(socket, entrada);
+      if (typeof datos.desafioId !== 'string' || typeof datos.paraPersonaId !== 'string' || typeof datos.emoji !== 'string') throw new BadRequestException('Completá destinatario, desafío y reacción');
+      if (!socket.rooms.has(`desafio:${datos.desafioId}`)) throw new BadRequestException('Abrí el detalle y suscribite al desafío');
+      return await this.realtime.alentar(datos.desafioId, { id: socket.data.personaId, nombre: socket.data.nombre }, datos.paraPersonaId, datos.emoji);
+    } catch (e) {
+      return this.error(e);
+    }
   }
 }

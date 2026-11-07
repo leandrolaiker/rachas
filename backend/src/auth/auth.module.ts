@@ -1,13 +1,14 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { PersonasModule } from '../personas/personas.module';
-import { AuthService } from './auth.service';
+import { TokenService } from './token.service';
+import { PersonaAuthService } from './persona-auth.service';
 import { AuthController } from './auth.controller';
-import { AuthGuard } from './auth.guard';
 
+@Global()
 @Module({
   imports: [PersonasModule],
   controllers: [AuthController],
-  providers: [AuthService, AuthGuard],
-  exports: [AuthGuard, AuthService],
+  providers: [TokenService, PersonaAuthService],
+  exports: [TokenService, PersonaAuthService],
 })
 export class AuthModule {}

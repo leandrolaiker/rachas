@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, FlatList, RefreshControl, StyleSheet, Text, T
 import { useSession } from '../session';
 import { personasApi, checkinsApi } from '../api';
 import type { ResumenItem } from '../types';
+import { avisar } from '../ui';
 
 export default function InicioScreen({ navigation }: any) {
   const { usuarioId } = useSession();
@@ -33,7 +34,7 @@ export default function InicioScreen({ navigation }: any) {
       await checkinsApi.registrar(item.desafio.id, {});
       await cargar();
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Error');
+      avisar('Error', e?.message || 'Error');
     } finally {
       setAccionando(null);
     }

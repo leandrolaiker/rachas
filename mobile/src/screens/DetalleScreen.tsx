@@ -1,13 +1,18 @@
-import React, { useContext, useEffect, useState } from 'react';
+declare const window: any;
+
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSession } from '../session';
 import { desafiosApi, checkinsApi } from '../api';
-import { connectSocket, getSocket } from '../socket';
+import { connectSocket, getSocket, disconnectSocket } from '../socket';
+import { getToken } from '../api';
 import type { Desafio, Persona, RankingItem, Checkin, RachasInfo } from '../types';
+import { avisar } from '../ui';
 
 export default function DetalleScreen({ route, navigation }: any) {
   const { id } = route.params;
-  const { usuarioId, token } = useSession();
+  const { usuarioId } = useSession();
+  const [socketRef, setSocketRef] = useState<any>(null);
   const [desafio, setDesafio] = useState<Desafio | null>(null);
   const [participantes, setParticipantes] = useState<Persona[]>([]);
   const [ranking, setRanking] = useState<RankingItem[]>([]);
@@ -51,27 +56,33 @@ export default function DetalleScreen({ route, navigation }: any) {
   }
 
   useEffect(() => { cargar(); }, [id, usuarioId]);
+
   useEffect(() => {
-    if (!usuarioId || !token) return;
-    const s = connectSocket(token);
-    const join = () => s.emit('unirse_desafio', { desafioId: id });
-    const reload = () => { cargar(); };
-    const events = ['checkin_registrado', 'checkin_deshcho', 'ranking_actualizado', 'participante_unido', 'participante_abandono', 'desafio_cancelado'];
-    const onConnect = () => join();
-    s.on('connect', onConnect);
-    join();
-    events.forEach((e) => s.on(e, reload));
-    const onAliento = (data: any) => {
-      if (data?.paraPersonaId === usuarioId) Alert.alert('Aliento', `${data.deAlias || 'Alguien'} te envio ${data.emoji}`);
-    };
-    s.on('aliento', onAliento);
-    return () => {
-      s.emit('salir_desafio', { desafioId: id });
-      s.off('connect', onConnect);
-      events.forEach((e) => s.off(e, reload));
-      s.off('aliento', onAliento);
-    };
-  }, [id, usuarioId, token]);
+    (async () => {
+      if (!usuarioId) return;
+      const token = await getToken();
+      if (!token) return;
+      const s = await connectSocket();
+      setSocketRef(s);
+      const join = () => s.emit('unirse_desafio', { desafioId: id });
+      const reload = () => { cargar(); };
+      const events = ['checkin_registrado', 'checkin_deshcho', 'ranking_actualizado', 'participante_unido', 'participante_abandono', 'desafio_cancelado'];
+      const onConnect = () => join();
+      s.on('connect', onConnect);
+      join();
+      events.forEach((e) => s.on(e, reload));
+      const onAliento = (data: any) => {
+        if (data?.paraPersonaId === usuarioId) avisar('Aliento', `${data.deAlias || 'Alguien'} te envio ${data.emoji}`);
+      };
+      s.on('aliento', onAliento);
+      return () => {
+        try { s.emit('salir_desafio', { desafioId: id }); } catch {}
+        s.off('connect', onConnect);
+        events.forEach((e) => s.off(e, reload));
+        s.off('aliento', onAliento);
+      };
+    })();
+  }, [id, usuarioId]);
 
   async function checkin() {
     if (!usuarioId) return;
@@ -81,7 +92,7 @@ export default function DetalleScreen({ route, navigation }: any) {
       setNota(''); setValor('');
       await cargar();
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Error');
+      avisar('Error', e?.message || 'Error');
     } finally {
       setAccionando('');
     }
@@ -94,34 +105,28 @@ export default function DetalleScreen({ route, navigation }: any) {
       await checkinsApi.deshacer(id);
       await cargar();
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Error');
+      avisar('Error', e?.message || 'Error');
     } finally {
       setAccionando('');
     }
   }
 
   async function abandonar() {
-    Alert.alert('Abandonar', 'Seguro que queres abandonar?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Abandonar', style: 'destructive', onPress: async () => {
-        setAccionando('abandonar');
-        try { await desafiosApi.abandonar(id); navigation.goBack(); }
-        catch (e: any) { Alert.alert('Error', e?.message || 'Error'); }
-        finally { setAccionando(''); }
-      } },
-    ]);
+    const ok = window.confirm('Seguro que queres abandonar?');
+    if (!ok) return;
+    setAccionando('abandonar');
+    try { await desafiosApi.abandonar(id); navigation.goBack(); }
+    catch (e: any) { avisar('Error', e?.message || 'Error'); }
+    finally { setAccionando(''); }
   }
 
   async function cancelar() {
-    Alert.alert('Cancelar desafio', 'Seguro que queres cancelar?', [
-      { text: 'No', style: 'cancel' },
-      { text: 'Cancelar', style: 'destructive', onPress: async () => {
-        setAccionando('cancelar');
-        try { await desafiosApi.cancelar(id); await cargar(); }
-        catch (e: any) { Alert.alert('Error', e?.message || 'Error'); }
-        finally { setAccionando(''); }
-      } },
-    ]);
+    const ok = window.confirm('Seguro que queres cancelar el desafío?');
+    if (!ok) return;
+    setAccionando('cancelar');
+    try { await desafiosApi.cancelar(id); navigation.goBack(); }
+    catch (e: any) { avisar('Error', e?.message || 'Error'); }
+    finally { setAccionando(''); }
   }
 
   if (cargando) return <View style={estilos.centro}><ActivityIndicator size="large" /></View>;

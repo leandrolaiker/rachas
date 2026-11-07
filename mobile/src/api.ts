@@ -1,20 +1,13 @@
 import * as T from './types';
 
-const base = (process.env.EXPO_PUBLIC_API_URL as string) || 'http://10.0.2.2:3000';
+const base = (process.env.EXPO_PUBLIC_API_URL as string) || 'http://localhost:3000';
 
-let usuarioId: string | null = null;
-let authToken: string | null = null;
-export function setUsuarioId(id: string | null) {
-  usuarioId = id;
+let tokenGetter: (() => Promise<string | null>) | null = null;
+export function setTokenGetter(fn: (() => Promise<string | null>) | null) {
+  tokenGetter = fn;
 }
-export function getUsuarioId() {
-  return usuarioId;
-}
-export function setAuthToken(token: string | null) {
-  authToken = token;
-}
-export function getAuthToken() {
-  return authToken;
+export async function getToken() {
+  return tokenGetter ? tokenGetter() : null;
 }
 
 export class ApiError extends Error {
@@ -26,12 +19,14 @@ export class ApiError extends Error {
 }
 
 async function request(path: string, options: RequestInit = {}) {
+  const token = await getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-    ...(usuarioId ? { 'x-usuario-id': usuarioId } : {}),
     ...(options.headers as Record<string, string>),
   };
+  if (token) {
+    headers['Authorization'] = 'Bearer ' + token;
+  }
   const res = await fetch(`${base}${path}`, { ...options, headers });
   if (!res.ok) {
     let msg = `Error ${res.status}`;
@@ -49,12 +44,15 @@ async function request(path: string, options: RequestInit = {}) {
 
 export const personasApi = {
   crear: (dto: T.CrearPersonaDto) => request('/personas', { method: 'POST', body: JSON.stringify(dto) }) as Promise<T.Persona>,
-  login: (identificador: string, password: string) => request('/auth/login', { method: 'POST', body: JSON.stringify({ identificador, password }) }) as Promise<{ token: string; persona: T.Persona }>,
-  logout: () => request('/auth/logout', { method: 'POST' }) as Promise<{ ok: boolean }>,
   listar: () => request('/personas') as Promise<T.Persona[]>,
   una: (id: string) => request(`/personas/${id}`) as Promise<T.Persona>,
   actualizar: (id: string, dto: T.ActualizarPersonaDto) => request(`/personas/${id}`, { method: 'PATCH', body: JSON.stringify(dto) }) as Promise<T.Persona>,
   inicio: (id: string) => request(`/desafios/resumen/${id}`) as Promise<T.ResumenItem[]>,
+};
+
+export const meApi = {
+  obtener: () => request('/me') as Promise<T.Persona>,
+  alias: (alias: string) => request('/me/alias', { method: 'PATCH', body: JSON.stringify({ alias }) }) as Promise<T.Persona>,
 };
 
 export const desafiosApi = {

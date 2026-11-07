@@ -26,9 +26,17 @@ export class Persona extends Document {
 
   @Prop()
   authToken?: string;
+
+  // Auth0 identity fields (from Racha-main reference)
+  @Prop({ immutable: true })
+  emisor?: string;
+
+  @Prop({ immutable: true })
+  sujeto?: string;
 }
 
 export const PersonaSchema = SchemaFactory.createForClass(Persona);
 PersonaSchema.index({ alias: 1 }, { unique: true, sparse: true });
 PersonaSchema.index({ email: 1 }, { unique: true });
 PersonaSchema.index({ firebaseUid: 1 }, { unique: true, sparse: true });
+PersonaSchema.index({ emisor: 1, sujeto: 1 }, { unique: true, partialFilterExpression: { sujeto: { $type: 'string' } } });
